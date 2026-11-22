@@ -3,6 +3,9 @@ import { CheckCircle2, Database, Eye, FileText, Table, TriangleAlert, UploadClou
 import AppShell from '../components/AppShell.jsx'
 import { Badge, Button, Card, PageHeading, ProgressBar } from '../components/ui.jsx'
 import { courses, deadlines, term, user } from '../data/mock.js'
+import { featurePath } from '../data/features.js'
+import { latestForCode } from '../data/syllabi.js'
+import { useAppState } from '../state/context.js'
 
 const verified = courses.filter((c) => c.status === 'Verified').length
 const pending = courses.filter((c) => c.status !== 'Verified')
@@ -20,10 +23,11 @@ const metrics = [
   { label: 'AI Test Bank Items', icon: Database, value: 150, line: "Aligned to Bloom's tags", sub: '+45 this sem' },
 ]
 
-const routeForType = { Syllabus: '/verification', 'TOS Draft': '/tos', 'Exam Bank': '/bank' }
+const featureForType = { Syllabus: 'verification', 'TOS Draft': 'tos', 'Exam Bank': 'bank' }
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { syllabi } = useAppState()
   void verified
 
   return (
@@ -74,7 +78,10 @@ export default function Dashboard() {
             {courses.map((c) => (
               <Link
                 key={c.code}
-                to={c.issue ? '/consistency' : routeForType[c.type]}
+                to={featurePath(
+                  c.issue ? 'consistency' : featureForType[c.type],
+                  latestForCode(syllabi, c.code)?.id,
+                )}
                 className="flex items-center border-b border-line px-5 py-4 last:border-b-0 hover:bg-white/60"
               >
                 <p className="w-[110px] text-[13px] font-bold text-brand">{c.code}</p>

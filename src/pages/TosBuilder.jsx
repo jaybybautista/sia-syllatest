@@ -3,16 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, Info, Lock } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Badge, Button, Card, Modal } from '../components/ui.jsx'
-import { courses, syllabus } from '../data/mock.js'
-import { bloomColumns, buildMatrix } from '../data/tos.js'
-import { useAppState } from '../state/context.js'
+import { buildMatrix } from '../data/tos.js'
+import { levelAbbrev } from '../data/bloom.js'
+import { useAppState, useSyllabus } from '../state/context.js'
 
-const course = courses[0]
 const splits = ['Lecture Split (60%)', 'Laboratory Split (40%)']
 
 export default function TosBuilder() {
   const navigate = useNavigate()
-  const { examConfig, tosLocked, setTosLocked } = useAppState()
+  const { examConfig, bloomLevels, updateSyllabus } = useAppState()
+  const { syllabus } = useSyllabus()
+  const course = syllabus
+  const tosLocked = syllabus.tosLocked
   const [split, setSplit] = useState(splits[0])
   const [confirmLock, setConfirmLock] = useState(false)
   const [nonce, setNonce] = useState(0)
@@ -20,14 +22,15 @@ export default function TosBuilder() {
   // Only the chapters selected on the configuration screen take part in the allocation.
   const selectedChapters = useMemo(
     () => syllabus.chapters.filter((c) => examConfig.chapters.includes(c.n)),
-    [examConfig.chapters],
+    [examConfig.chapters, syllabus.chapters],
   )
 
+  // Columns follow the signed-in user's taxonomy, so levels they added get their own column.
   const { rows, totals } = useMemo(
-    () => buildMatrix(selectedChapters, examConfig.items, examConfig.mix),
+    () => buildMatrix(selectedChapters, examConfig.items, examConfig.mix, bloomLevels),
     // nonce lets "Recalculate values" re-run the allocation explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [examConfig.items, examConfig.mix, selectedChapters, nonce],
+    [examConfig.items, examConfig.mix, selectedChapters, bloomLevels, nonce],
   )
 
   const aligned = totals.items === examConfig.items
@@ -99,8 +102,8 @@ export default function TosBuilder() {
                 <th className="w-[60px] p-3 font-bold">HOURS</th>
                 <th className="w-[80px] p-3 font-bold">WEIGHT %</th>
                 <th className="w-[80px] p-3 font-bold">ITEMS</th>
-                <th className="p-3 text-center font-bold" colSpan={bloomColumns.length}>
-                  BLOOM DISTRIBUTION (REM / UND / APP / ANA / EVA / CRE)
+                <th className="p-3 text-center font-bold" colSpan={bloomLevels.length}>
+                  BLOOM DISTRIBUTION ({bloomLevels.map((l) => levelAbbrev(l.name)).join(' / ')})
                 </th>
                 <th className="w-[80px] p-3 text-right font-bold">POINTS</th>
               </tr>
@@ -119,7 +122,8 @@ export default function TosBuilder() {
                   <td className="p-4 font-bold text-brand">{r.items}</td>
                   {r.bloom.map((count, i) => (
                     <td
-                      key={bloomColumns[i]}
+                      key={bloomLevels[i].id}
+                      title={bloomLevels[i].name}
                       className={`w-10 p-4 text-center ${
                         count > 0 ? 'font-semibold text-ink' : 'text-ink-3'
                       }`}
@@ -136,7 +140,7 @@ export default function TosBuilder() {
                 <td className="p-4">{totals.weight.toFixed(2)}%</td>
                 <td className="p-4 font-extrabold text-brand">{totals.items}</td>
                 {totals.bloom.map((count, i) => (
-                  <td key={bloomColumns[i]} className="w-10 p-4 text-center">
+                  <td key={bloomLevels[i].id} title={bloomLevels[i].name} className="w-10 p-4 text-center">
                     {count}
                   </td>
                 ))}
@@ -186,7 +190,7 @@ export default function TosBuilder() {
               </Button>
               <Button
                 onClick={() => {
-                  setTosLocked(true)
+                  updateSyllabus(syllabus.id, { tosLocked: true })
                   setConfirmLock(false)
                   navigate('/generation')
                 }}

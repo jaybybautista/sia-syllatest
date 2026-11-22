@@ -3,15 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { Calendar, Check, CheckCircle2, Lock } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Badge, Button, Card, Modal } from '../components/ui.jsx'
-import { bankItems, chair, computedHours, courses, deadlines, syllabus, user } from '../data/mock.js'
+import { chair, deadlines } from '../data/mock.js'
+import { featurePath } from '../data/features.js'
+import { useAppState, useSyllabus } from '../state/context.js'
 
-const course = courses[0]
 const states = ['Draft', 'For Review', 'Revisions', 'Approved']
 
 // Required hours per CO come from the stated 90 spread evenly over the chapters each CO owns;
 // mapped hours are the chapter figures as extracted. The Figma frame hard-coded the overage onto
 // CO 2, which contradicted its own "reduce Chapter 4" recommendation.
-function coCoverage() {
+function coCoverage(syllabus) {
   const byCo = {}
   for (const ch of syllabus.chapters) {
     byCo[ch.co] = (byCo[ch.co] ?? 0) + ch.hours
@@ -28,29 +29,58 @@ function coCoverage() {
 
 // Figma's prefilled text called the 91-vs-90 figure a "1 Hour Deficit" on CO 2 and described 54
 // as the lecture constraint, though the cover page lists 54 as laboratory hours and the overage
-// sits on Chapter 4 (CO 3). The options below name the finding correctly.
-const revisionReasons = [
-  `CO 3 — Cloud deployment (${computedHours - syllabus.statedHours} hour over-allocation in stated lecture hours)`,
-  'CO 2 — Asynchronous REST API integration (outcome mismatch on drafted items)',
-  'Distractor quality below standard',
-  'Insufficient coverage of a course outcome',
-]
+// sits on Chapter 4 (CO 3). The options are derived from the syllabus so they name the real gap.
+function revisionReasonsFor(syllabus, coverage, computedHours) {
+  const short = (text) => text.split(' ').slice(0, 5).join(' ').replace(/[.,]$/, '')
+  const gaps = coverage
+    .filter((c) => c.delta !== 0)
+    .map(
+      (c) =>
+        `${c.id} — ${short(c.text)} (${Math.abs(c.delta)} hour ${c.delta > 0 ? 'over-allocation' : 'shortfall'})`,
+    )
+  const hours =
+    computedHours !== syllabus.statedHours && gaps.length === 0
+      ? [`Topic hours — ${computedHours} computed vs ${syllabus.statedHours} stated`]
+      : []
+  return [
+    ...gaps,
+    ...hours,
+    ...syllabus.outcomes.map((o) => `${o.id} — ${short(o.text)} (outcome mismatch on drafted items)`),
+    'Distractor quality below standard',
+    'Insufficient coverage of a course outcome',
+  ]
+}
 
 export default function Approval() {
   const navigate = useNavigate()
-  const coverage = useMemo(coCoverage, [])
-  const [state, setState] = useState('For Review')
+  const { syllabus } = useSyllabus()
+  const { updateSyllabus } = useAppState()
+  const course = syllabus
+  const author = { name: syllabus.instructor }
+  const computedHours = syllabus.chapters.reduce((sum, c) => sum + c.hours, 0)
+  const coverage = useMemo(() => coCoverage(syllabus), [syllabus])
+  const revisionReasons = useMemo(
+    () => revisionReasonsFor(syllabus, coverage, computedHours),
+    [syllabus, coverage, computedHours],
+  )
+  const thread = syllabus.review.thread
+  // The review state belongs to the syllabus, so the history list shows it after leaving.
+  const state = syllabus.review.state
+  function setState(next) {
+    updateSyllabus(syllabus.id, (s) => ({ review: { ...s.review, state: next } }))
+  }
   const [checks, setChecks] = useState({ hours: true, outcomes: false, duplicates: true, bloom: true })
   const [requesting, setRequesting] = useState(false)
   const [reason, setReason] = useState(revisionReasons[0])
   const [note, setNote] = useState(
-    `Please adjust the stated hours in Topic Section 4 so the chapter schedule reconciles with the ${syllabus.statedHours}-hour total on the cover page. Detected ${computedHours} computed vs ${syllabus.statedHours} stated hours.`,
+    computedHours !== syllabus.statedHours
+      ? `Please adjust the chapter hours so the schedule reconciles with the ${syllabus.statedHours}-hour total on the cover page. Detected ${computedHours} computed vs ${syllabus.statedHours} stated hours.`
+      : `Please revise the ${syllabus.code} blueprint before it is resubmitted for approval.`,
   )
   const [severity, setSeverity] = useState('Critical Mismatch')
   const [due, setDue] = useState('2024-03-25')
   const [notify, setNotify] = useState(true)
 
-  const mismatch = bankItems[0]
   const allChecked = Object.values(checks).every(Boolean)
 
   const checklist = [
@@ -109,7 +139,9 @@ export default function Approval() {
                 the CHED compliance table of specifications or configure parallel final test banks.
               </p>
               <div className="flex flex-wrap gap-3">
-                <Button onClick={() => navigate('/tos')}>Build Table of Specifications (TOS)</Button>
+                <Button onClick={() => navigate(featurePath('tos', syllabus.id))}>
+                  Build Table of Specifications (TOS)
+                </Button>
                 <Button
                   variant="ghost"
                   className="border-brand text-brand"
@@ -194,28 +226,26 @@ export default function Approval() {
 
           <div className="flex flex-col gap-3">
             <p className="text-[13px] font-bold text-ink-2">ITEM AUDIT TRAIL</p>
-            <Card className="flex flex-col gap-3 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-[13px] font-bold text-brand">
-                  Item 3 ({mismatch.id})
-                </p>
-                <Badge tone="bad">OUTCOME MISMATCH</Badge>
-              </div>
-              <p className="text-[13px]">
-                Question maps to &ldquo;Asynchronous backend API integration&rdquo; but targets
-                &ldquo;Simple local storage arrays&rdquo;.
-              </p>
-              <div className="rounded-md border border-white/40 bg-white/70 p-3">
+            {thread ? (
+              <Card className="flex flex-col gap-3 rounded-lg p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] font-bold text-ink-2">{user.name} (Instructor)</p>
-                  <p className="text-[10px] text-ink-3">12 mins ago</p>
+                  <p className="text-[13px] font-bold text-brand">{thread.item}</p>
+                  <Badge tone="bad">OUTCOME MISMATCH</Badge>
                 </div>
-                <p className="mt-2 text-xs text-ink-2">
-                  &ldquo;Understood. We will adjust the item target to utilize asynchronous Axios
-                  configurations to match {mismatch.co}.&rdquo;
-                </p>
-              </div>
-            </Card>
+                <p className="text-[13px]">{thread.issue}</p>
+                <div className="rounded-md border border-white/40 bg-white/70 p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-bold text-ink-2">{author.name} (Instructor)</p>
+                    <p className="text-[10px] text-ink-3">{thread.when}</p>
+                  </div>
+                  <p className="mt-2 text-xs text-ink-2">&ldquo;{thread.reply}&rdquo;</p>
+                </div>
+              </Card>
+            ) : (
+              <p className="rounded-lg border border-line bg-white/70 p-4 text-[13px] text-ink-3">
+                No open reviewer threads on the {syllabus.code} blueprint.
+              </p>
+            )}
           </div>
         </Card>
 
@@ -370,7 +400,7 @@ export default function Approval() {
                   <button
                     role="switch"
                     aria-checked={notify}
-                    aria-label={`Notify ${user.name}`}
+                    aria-label={`Notify ${author.name}`}
                     onClick={() => setNotify((n) => !n)}
                     className={`relative h-5 w-10 shrink-0 rounded-full transition-colors ${
                       notify ? 'bg-brand' : 'bg-slate-300'
@@ -382,7 +412,7 @@ export default function Approval() {
                       }`}
                     />
                   </button>
-                  <p className="text-[13px]">Notify {user.name}</p>
+                  <p className="text-[13px]">Notify {author.name}</p>
                 </div>
               </div>
             </div>

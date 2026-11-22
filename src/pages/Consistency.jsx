@@ -3,22 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { Check, CheckCircle2, Loader, Sparkles } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Badge, Button, Card, Modal } from '../components/ui.jsx'
-import {
-  auditChecks,
-  bankItems,
-  complianceScore,
-  computedHours,
-  courses,
-  findings as allFindings,
-  severityTone,
-  syllabus,
-} from '../data/mock.js'
+import { auditChecks, severityTone } from '../data/mock.js'
+import { featurePath } from '../data/features.js'
+import { useSyllabus } from '../state/context.js'
 
-const course = courses[0]
 const weight = { CRITICAL: 14, MEDIUM: 6, LOW: 2 }
 
 export default function Consistency() {
   const navigate = useNavigate()
+  const { syllabus } = useSyllabus()
+  const course = syllabus
+  const { bankItems, complianceScore, findings: allFindings } = syllabus
+  const computedHours = syllabus.chapters.reduce((sum, c) => sum + c.hours, 0)
   const [findings, setFindings] = useState(allFindings)
   const [resolved, setResolved] = useState([])
   const [auditing, setAuditing] = useState(false)
@@ -40,12 +36,11 @@ export default function Consistency() {
     return allFindings.find((f) => f.id === id)
   }
 
-  // The unassessed-outcome finding names a CO; the dialog then offers bank items that already
+  // An unassessed-outcome finding names a CO; the dialog then offers bank items that already
   // sit in that outcome's chapters so faculty can map coverage without drafting new questions.
-  const targetOutcome =
-    resolving?.id === 'MAP-012'
-      ? syllabus.outcomes.find((o) => resolving.detail.includes(o.id.replace(' ', ' ')))
-      : null
+  const targetOutcome = resolving?.targetCo
+    ? syllabus.outcomes.find((o) => o.id === resolving.targetCo)
+    : null
   const mappableItems = targetOutcome
     ? bankItems.filter((i) => i.co === targetOutcome.id)
     : []
@@ -208,7 +203,7 @@ export default function Consistency() {
           </div>
         </div>
         <div className="flex shrink-0 gap-3">
-          <Button variant="ghost" onClick={() => navigate('/verification')}>
+          <Button variant="ghost" onClick={() => navigate(featurePath('verification', syllabus.id))}>
             Return to Verification
           </Button>
           {clean ? (
@@ -357,11 +352,13 @@ export default function Consistency() {
             <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-slate-50 p-3 text-[11px]">
               <p className="font-bold text-ink-3">CONSOLE DIAGNOSTIC LOG</p>
               <p className="text-ink-2">
-                [LOG] Verifying CO-3 matches diagnostic question-bank outcomes...
+                [LOG] Verifying {syllabus.outcomes.length} course outcomes against diagnostic
+                question-bank items...
               </p>
               {auditProgress > 60 && (
                 <p className="text-ink-2">
-                  [LOG] Found 1 unassessed cognitive descriptor node in {course.code} lab list.
+                  [LOG] Found {findings.length} open finding{findings.length === 1 ? '' : 's'} in the{' '}
+                  {course.code} syllabus.
                 </p>
               )}
             </div>
@@ -417,6 +414,11 @@ export default function Consistency() {
             </p>
             {targetOutcome ? (
               <div className="flex flex-col gap-2">
+                {mappableItems.length === 0 && (
+                  <p className="text-xs text-ink-3">
+                    No bank items sit in {targetOutcome.id}&apos;s chapters yet.
+                  </p>
+                )}
                 {mappableItems.map((item) => (
                   <label
                     key={item.id}

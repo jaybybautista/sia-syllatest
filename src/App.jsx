@@ -18,6 +18,19 @@ import Sso from './pages/Sso.jsx'
 import Notifications from './pages/Notifications.jsx'
 import Help from './pages/Help.jsx'
 import Profile from './pages/Profile.jsx'
+import BloomTaxonomy from './pages/BloomTaxonomy.jsx'
+import SyllabusHistory from './components/SyllabusHistory.jsx'
+import SyllabusRoute from './components/SyllabusRoute.jsx'
+
+// Each of these opens on the list of uploaded syllabi; tapping one opens the screen for it.
+const syllabusFeatures = [
+  ['verification', '/verification', <Verification />],
+  ['consistency', '/consistency', <Consistency />],
+  ['tos', '/tos', <TosBuilder />],
+  ['bank', '/bank', <Bank />],
+  ['approval', '/approval', <Approval />],
+  ['analysis', '/analysis', <Analysis />],
+]
 
 export default function App() {
   return (
@@ -26,17 +39,20 @@ export default function App() {
       <Route path="/signin" element={<SignIn />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/upload" element={<Upload />} />
-      <Route path="/verification" element={<Verification />} />
-      <Route path="/consistency" element={<Consistency />} />
+      {syllabusFeatures.flatMap(([key, path, page]) => [
+        <Route key={key} path={path} element={<SyllabusHistory feature={key} />} />,
+        <Route
+          key={`${key}-detail`}
+          path={`${path}/:syllabusId`}
+          element={<SyllabusRoute feature={key}>{page}</SyllabusRoute>}
+        />,
+      ])}
+      <Route path="/bloom" element={<BloomTaxonomy />} />
       <Route path="/exam-config" element={<ExamConfig />} />
-      <Route path="/tos" element={<TosBuilder />} />
       <Route path="/generation" element={<Generation />} />
       <Route path="/review" element={<Review />} />
       <Route path="/export" element={<Export />} />
-      <Route path="/bank" element={<Bank />} />
       <Route path="/chair" element={<ChairDashboard />} />
-      <Route path="/approval" element={<Approval />} />
-      <Route path="/analysis" element={<Analysis />} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/sso" element={<Sso />} />
       <Route path="/notifications" element={<Notifications />} />

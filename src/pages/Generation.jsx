@@ -6,6 +6,7 @@ import { Button, Card, ProgressBar } from '../components/ui.jsx'
 import { aiProviders, syllabus } from '../data/mock.js'
 import { buildMatrix } from '../data/tos.js'
 import { useAppState } from '../state/context.js'
+import { featurePath } from '../data/features.js'
 
 // Tier label per chapter position, matching the completion summary in the design.
 const tierLabel = ['Lower-Order', 'Mid-Order', 'Mid-Order', 'High-Order']
@@ -17,7 +18,7 @@ const [primaryProvider, fallbackProvider] = aiProviders
 
 export default function Generation() {
   const navigate = useNavigate()
-  const { examConfig } = useAppState()
+  const { examConfig, activeSyllabusId } = useAppState()
 
   const selectedChapters = useMemo(
     () => syllabus.chapters.filter((c) => examConfig.chapters.includes(c.n)),
@@ -152,7 +153,7 @@ export default function Generation() {
             </div>
             <hr className="border-line" />
             <div className="flex gap-3">
-              <Button variant="ghost" className="flex-1" onClick={() => navigate('/tos')}>
+              <Button variant="ghost" className="flex-1" onClick={() => navigate(featurePath('tos', activeSyllabusId))}>
                 Cancel Job
               </Button>
               <Button className="flex-1" onClick={retry}>

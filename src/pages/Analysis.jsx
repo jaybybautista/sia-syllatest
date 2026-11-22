@@ -2,35 +2,28 @@ import { useRef, useState } from 'react'
 import { CheckCircle2, FileDown, UploadCloud, XCircle } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Badge, Button, Card, Modal, ProgressBar } from '../components/ui.jsx'
-import { useAppState } from '../state/context.js'
-import {
-  analysedItems,
-  analysisStats,
-  attainment,
-  attainmentTarget,
-  cohortSize,
-  courses,
-  difficultyLabel,
-  itemVerdict,
-  syllabus,
-} from '../data/mock.js'
-
-const course = courses[0]
-const outcomeText = Object.fromEntries(
-  syllabus.outcomes.map((o) => [o.id, o.text.replace(/\.$/, '')]),
-)
+import { useAppState, useSyllabus } from '../state/context.js'
+import { attainmentTarget, difficultyLabel, itemVerdict } from '../data/mock.js'
+import { sampleAnalysis } from '../data/syllabi.js'
 
 const discriminationWord = (v) =>
   v >= 0.4 ? 'Very Good' : v >= 0.3 ? 'Good' : v >= 0.15 ? 'Poor' : 'Very Poor'
 
 export default function Analysis() {
-  const { examConfig } = useAppState()
+  const { examConfig, updateSyllabus } = useAppState()
+  const { syllabus } = useSyllabus()
+  const course = syllabus
+  const outcomeText = Object.fromEntries(
+    syllabus.outcomes.map((o) => [o.id, o.text.replace(/\.$/, '')]),
+  )
+  // The results file this screen was opened for; null until one is uploaded for the syllabus.
+  const data = syllabus.analysis
   const fileInput = useRef(null)
-  const [results, setResults] = useState(null)
+  const [results, setResults] = useState(data ? { name: data.file } : null)
   const [mapping, setMapping] = useState(false)
   const [columns, setColumns] = useState({})
   const [anonymize, setAnonymize] = useState(true)
-  const students = cohortSize
+  const students = data?.cohortSize ?? sampleAnalysis(syllabus, '').cohortSize
   const mappingErrors = 0
   // Which way the faculty wants each flagged item handled, keyed by item id.
   const [decisions, setDecisions] = useState({})
@@ -45,7 +38,21 @@ export default function Analysis() {
   const [dismissed, setDismissed] = useState(false)
   const [exported, setExported] = useState(false)
   const [detail, setDetail] = useState(null)
+  const attainment = data?.attainment ?? []
   const belowTarget = attainment.filter((a) => a.pct < attainmentTarget).length
+
+  // Running the analysis on a newly picked file records it against the syllabus, so it shows in
+  // the results history from then on.
+  function runAnalysis() {
+    if (results && results.name !== data?.file) {
+      updateSyllabus(syllabus.id, (s) => ({
+        analysis: s.analysis
+          ? { ...s.analysis, file: results.name, uploadedOn: new Date().toISOString() }
+          : sampleAnalysis(s, results.name),
+      }))
+    }
+    setMapping(false)
+  }
 
   function pick(file) {
     if (!file) return
@@ -105,7 +112,7 @@ export default function Analysis() {
                 ],
                 [
                   'Part C: Diagnostic Item Discrimination Analysis Logs',
-                  `Includes KR-20 reliability metrics (${analysisStats[0].value})`,
+                  `Includes KR-20 reliability metrics (${data?.stats[0].value ?? '—'})`,
                 ],
               ].map(([part, note]) => (
                 <div
@@ -233,7 +240,7 @@ export default function Analysis() {
               >
                 Re-upload File
               </Button>
-              <Button onClick={() => setMapping(false)}>Run Statistical Item Analysis</Button>
+              <Button onClick={runAnalysis}>Run Statistical Item Analysis</Button>
             </div>
           </div>
         </Card>
@@ -288,8 +295,19 @@ export default function Analysis() {
             />
           </div>
 
+          {!data && (
+            <Card className="flex flex-col gap-1.5 rounded-2xl p-6">
+              <p className="text-sm font-bold">No results file for {course.code} yet</p>
+              <p className="text-[13px] text-ink-3">
+                Upload the {course.code} answer matrix above. Item statistics and outcome attainment
+                appear here once the analysis runs.
+              </p>
+            </Card>
+          )}
+
+          {data && (
           <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
-            {analysisStats.map((s) => (
+            {data.stats.map((s) => (
               <Card key={s.label} className="flex flex-col gap-2 p-4">
                 <p className="text-xs font-bold uppercase text-ink-3">{s.label}</p>
                 <p className="text-2xl font-extrabold">{s.value}</p>
@@ -297,7 +315,9 @@ export default function Analysis() {
               </Card>
             ))}
           </div>
+          )}
 
+          {data && (
           <Card className="overflow-x-auto rounded-2xl shadow-[0_12px_28px_rgba(15,23,42,0.07)]">
             <table className="w-full min-w-[720px] border-collapse text-left">
               <thead>
@@ -310,7 +330,7 @@ export default function Analysis() {
                 </tr>
               </thead>
               <tbody>
-                {analysedItems.map((it) => {
+                {data.items.map((it) => {
                   const v = itemVerdict(it.discrimination)
                   return (
                     <tr
@@ -340,11 +360,15 @@ export default function Analysis() {
               </tbody>
             </table>
           </Card>
+          )}
         </div>
 
         <Card className="flex w-[400px] shrink-0 flex-col gap-5 p-5 max-xl:w-full">
           <p className="text-sm font-bold">COURSE OUTCOME ATTAINMENT</p>
           <div className="flex flex-col gap-4">
+            {attainment.length === 0 && (
+              <p className="text-[13px] text-ink-3">Attainment is computed from an uploaded results file.</p>
+            )}
             {attainment.map((a) => {
               const met = a.pct >= attainmentTarget
               return (
@@ -375,7 +399,13 @@ export default function Analysis() {
             <Button className="w-full" disabled={!results || synced} onClick={sync}>
               {synced ? 'Attainment Synced' : 'Sync Attainment to PSU Registrar'}
             </Button>
-            <Button variant="ghost" icon={FileDown} className="w-full" onClick={() => setExported(true)}>
+            <Button
+              variant="ghost"
+              icon={FileDown}
+              className="w-full"
+              disabled={!data}
+              onClick={() => setExported(true)}
+            >
               Export CHED Accreditation PDF
             </Button>
             {!results && (
@@ -421,7 +451,9 @@ export default function Analysis() {
           <div className="mt-3 flex flex-col gap-2.5 rounded-lg bg-slate-50 p-4 text-[13px]">
             <div className="flex justify-between gap-4">
               <p className="text-ink-3">Course / Section</p>
-              <p className="font-semibold">{course.code} — Section 3A</p>
+              <p className="font-semibold">
+                {course.code} — {data?.section}
+              </p>
             </div>
             <div className="flex justify-between gap-4">
               <p className="text-ink-3">Sync Reference ID</p>

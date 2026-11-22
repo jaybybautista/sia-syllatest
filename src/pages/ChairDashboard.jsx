@@ -9,11 +9,15 @@ import {
   complianceTone,
   facultyActivity,
 } from '../data/mock.js'
+import { featurePath } from '../data/features.js'
+import { latestForCode } from '../data/syllabi.js'
+import { useAppState } from '../state/context.js'
 
 const icons = { file: FileText, shield: ShieldCheck, coins: Coins, award: Award }
 
 export default function ChairDashboard() {
   const navigate = useNavigate()
+  const { syllabi } = useAppState()
 
   return (
     <AppShell
@@ -67,7 +71,7 @@ export default function ChairDashboard() {
                         </Badge>
                       </td>
                       <td className="px-5 py-4">
-                        <Button className="px-3 py-1.5 text-[11px]" onClick={() => navigate('/approval')}>
+                        <Button className="px-3 py-1.5 text-[11px]" onClick={() => navigate(featurePath('approval', latestForCode(syllabi, r.code)?.id))}>
                           {r.action}
                         </Button>
                       </td>

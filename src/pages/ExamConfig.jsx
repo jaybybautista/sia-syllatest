@@ -5,6 +5,7 @@ import AppShell from '../components/AppShell.jsx'
 import { Badge, Button, Card, Modal } from '../components/ui.jsx'
 import { courses, syllabus, timingTemplates } from '../data/mock.js'
 import { useAppState } from '../state/context.js'
+import { featurePath } from '../data/features.js'
 
 const course = courses[0]
 
@@ -45,7 +46,7 @@ const groupLabel = 'text-[11px] font-bold text-ink-3'
 
 export default function ExamConfig() {
   const navigate = useNavigate()
-  const { examConfig, setExamConfig } = useAppState()
+  const { examConfig, setExamConfig, activeSyllabusId } = useAppState()
   const { examType, weighting, translation, items, duration, mix, chapters } = examConfig
   const [overrideTime, setOverrideTime] = useState(false)
 
@@ -338,7 +339,7 @@ export default function ExamConfig() {
                 Auto-Optimize Question Count
               </Button>
             ) : (
-              <Button className="w-full" disabled={blocked} onClick={() => navigate('/tos')}>
+              <Button className="w-full" disabled={blocked} onClick={() => navigate(featurePath('tos', activeSyllabusId))}>
                 Generate TOS Allocation Matrix
               </Button>
             )}

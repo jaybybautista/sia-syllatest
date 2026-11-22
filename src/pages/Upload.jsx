@@ -21,6 +21,9 @@ import {
   uploadSizeLimitMb,
   uploadSteps,
 } from '../data/mock.js'
+import { createSyllabusRecord } from '../data/syllabi.js'
+import { featurePath } from '../data/features.js'
+import { useAppState } from '../state/context.js'
 
 const fileIcons = { presentation: MonitorPlay, book: BookOpen, file: FileText }
 
@@ -34,6 +37,7 @@ const label = 'text-xs font-bold text-ink-2'
 
 export default function Upload() {
   const navigate = useNavigate()
+  const { syllabi, addSyllabus } = useAppState()
   const fileInput = useRef(null)
   const groundingInput = useRef(null)
 
@@ -65,13 +69,22 @@ export default function Upload() {
   }
 
   function proceed() {
+    // The upload joins the syllabus history straight away, so every feature list shows it.
+    const record = createSyllabusRecord(syllabi, {
+      code: meta.code.trim() || 'Untitled',
+      title: meta.title.trim() || file.name,
+      term: meta.term.trim() || term.label,
+      file: file.name,
+      fileSize: Number(file.size),
+    })
+    addSyllabus(record)
     setProcessing(true)
     setProgress(0)
     const timer = setInterval(() => {
       setProgress((p) => {
         if (p >= 100) {
           clearInterval(timer)
-          navigate('/verification')
+          navigate(featurePath('verification', record.id))
           return 100
         }
         return p + 5

@@ -17,6 +17,13 @@ export const chair = {
   role: 'Department Chair / Audit Lead',
 }
 
+// Each role signs in as a different person, so the account shown follows the active role.
+export const accountByRole = {
+  faculty: user,
+  chair,
+  admin: { name: 'ICT Systems Admin', email: 'ict-admin@psu.edu.ph' },
+}
+
 export const term = {
   label: '2nd Sem, A.Y. 2023-2024',
   long: 'Second Semester, Academic Year 2023 - 2024',

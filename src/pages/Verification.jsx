@@ -1,14 +1,17 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { CircleAlert, TriangleAlert, ZoomIn, ZoomOut } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { CircleAlert, Settings2, TriangleAlert, ZoomIn, ZoomOut } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Button, Card, Modal } from '../components/ui.jsx'
-import { bloomLevels, bloomTone, courses, syllabus } from '../data/mock.js'
-
-const course = courses[0]
+import { bloomToneFor } from '../data/bloom.js'
+import { featurePath } from '../data/features.js'
+import { useAppState, useSyllabus } from '../state/context.js'
 
 export default function Verification() {
   const navigate = useNavigate()
+  const { syllabus } = useSyllabus()
+  const { bloomLevels } = useAppState()
+  const course = syllabus
   const [zoom, setZoom] = useState(1)
   const [outcomes, setOutcomes] = useState(syllabus.outcomes)
   const [chapters, setChapters] = useState(syllabus.chapters)
@@ -64,7 +67,7 @@ export default function Verification() {
               <p className="mt-3 text-[11px] leading-relaxed text-ink-2">
                 Course Code: {course.code} · Course Title: {course.title} · Course Credits: 3 Units (
                 {syllabus.creditSplit}) · Stated Contact Hours: {syllabus.statedHours} Hours
-                (Lecture: 36, Laboratory: 54)
+                (Lecture: {syllabus.lectureHours}, Laboratory: {syllabus.labHours})
               </p>
               <p className="mt-6 text-[11px] font-extrabold">COURSE OUTCOMES (CO) &amp; MAPPING</p>
               <ul className="mt-3 flex flex-col gap-2 text-[10px] leading-[1.5] text-ink-2">
@@ -88,7 +91,7 @@ export default function Verification() {
               <Button
                 variant="accent"
                 className="px-3 py-1.5 text-xs"
-                onClick={() => navigate('/consistency')}
+                onClick={() => navigate(featurePath('consistency', syllabus.id))}
               >
                 Validate Consistency
               </Button>
@@ -115,7 +118,16 @@ export default function Verification() {
             </Card>
 
             <Card className="flex flex-col gap-3 rounded-xl p-4">
-              <p className="text-sm font-bold uppercase">Course Outcomes &amp; Cognitive Levels</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-bold uppercase">Course Outcomes &amp; Cognitive Levels</p>
+                <Link
+                  to="/bloom"
+                  className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-brand hover:underline"
+                >
+                  <Settings2 size={12} />
+                  Manage my levels
+                </Link>
+              </div>
               <div className="flex flex-col gap-2.5">
                 {outcomes.map((o) => (
                   <div key={o.id} className="flex items-center gap-3 rounded-md bg-slate-100 p-3">
@@ -129,13 +141,17 @@ export default function Verification() {
                           os.map((x) => (x.id === o.id ? { ...x, bloom: e.target.value } : x)),
                         )
                       }
-                      className={`shrink-0 rounded px-2 py-1 text-[11px] font-bold ${bloomTone[o.bloom]}`}
+                      className={`shrink-0 rounded px-2 py-1 text-[11px] font-bold ${bloomToneFor(o.bloom)}`}
                     >
                       {bloomLevels.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
+                        <option key={b.id} value={b.name}>
+                          {b.name}
                         </option>
                       ))}
+                      {/* A tag whose level was since deleted stays visible until it is changed. */}
+                      {!bloomLevels.some((b) => b.name === o.bloom) && (
+                        <option value={o.bloom}>{o.bloom} (removed)</option>
+                      )}
                     </select>
                   </div>
                 ))}
@@ -181,7 +197,10 @@ export default function Verification() {
                   Curriculum discrepancy check required. Stated lecture split hours sum to {total}{' '}
                   hours on extraction pipeline.
                 </p>
-                <Button className="shrink-0 px-4 py-2 text-[13px]" onClick={() => navigate('/consistency')}>
+                <Button
+                  className="shrink-0 px-4 py-2 text-[13px]"
+                  onClick={() => navigate(featurePath('consistency', syllabus.id))}
+                >
                   Trigger Audit Check
                 </Button>
               </Card>

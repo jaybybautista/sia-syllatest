@@ -3,17 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { Check, Plus, SlidersHorizontal, TriangleAlert, X } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Badge, Button, Card, Modal } from '../components/ui.jsx'
-import {
-  bankItems,
-  bankTotal,
-  bloomLevels,
-  bloomTone,
-  courses,
-  difficultyLevels,
-  discriminationLabel,
-  syllabus,
-  user,
-} from '../data/mock.js'
+import { difficultyLevels, discriminationLabel, user } from '../data/mock.js'
+import { bloomToneFor } from '../data/bloom.js'
+import { featurePath } from '../data/features.js'
+import { useAppState, useSyllabus } from '../state/context.js'
 
 const types = ['Multiple Choice', 'Short Answer', 'Code Writing']
 
@@ -21,9 +14,9 @@ const fieldClass =
   'w-full rounded-lg border border-white/40 bg-white/70 p-2.5 text-[13px] text-ink backdrop-blur-[6px]'
 const fieldLabel = 'text-[11px] font-bold text-ink-2'
 
+// The course is fixed by the syllabus the bank was opened for, so it is not a filter here.
 const emptyFilters = {
   keyword: '',
-  course: courses[0].code,
   chapters: [],
   cos: [],
   blooms: [],
@@ -31,14 +24,17 @@ const emptyFilters = {
   types: [],
 }
 
-// Figma's wizard listed Q-312 as "Analyze" and Q-313 as "Create", the reverse of the bank list on
-// the same data. The bank record is treated as the source of truth and the wizard reads from it.
-const matrixCells = syllabus.outcomes.flatMap((o) =>
-  bloomLevels.map((b) => `Cognitive Processing Level > ${b} (${o.id.replace(' ', '')})`),
-)
-
 export default function Bank() {
   const navigate = useNavigate()
+  const { syllabus } = useSyllabus()
+  const { bloomLevels } = useAppState()
+  const { bankItems, bankTotal } = syllabus
+  const bloomNames = bloomLevels.map((l) => l.name)
+  // Figma's wizard listed Q-312 as "Analyze" and Q-313 as "Create", the reverse of the bank list on
+  // the same data. The bank record is treated as the source of truth and the wizard reads from it.
+  const matrixCells = syllabus.outcomes.flatMap((o) =>
+    bloomNames.map((b) => `Cognitive Processing Level > ${b} (${o.id.replace(' ', '')})`),
+  )
   const [filters, setFilters] = useState(emptyFilters)
   const [draft, setDraft] = useState(emptyFilters)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -46,7 +42,7 @@ export default function Bank() {
   const [previewId, setPreviewId] = useState(bankItems[0].id)
   const [wizard, setWizard] = useState(null)
   const [tab, setTab] = useState('bulk')
-  const [cell, setCell] = useState(matrixCells[3])
+  const [cell, setCell] = useState(matrixCells[3] ?? matrixCells[0])
   const [weight, setWeight] = useState('10')
   const [points, setPoints] = useState('5')
 
@@ -59,8 +55,11 @@ export default function Bank() {
     return true
   }
 
-  const results = useMemo(() => bankItems.filter((q) => matches(q, filters)), [filters])
-  const draftCount = useMemo(() => bankItems.filter((q) => matches(q, draft)).length, [draft])
+  const results = useMemo(() => bankItems.filter((q) => matches(q, filters)), [bankItems, filters])
+  const draftCount = useMemo(
+    () => bankItems.filter((q) => matches(q, draft)).length,
+    [bankItems, draft],
+  )
 
   const preview = bankItems.find((q) => q.id === previewId)
   const flagged = results.find((q) => q.similarity)
@@ -79,7 +78,7 @@ export default function Bank() {
   }
 
   const chips = [
-    ...(filters.course ? [{ key: 'course', label: `Course: ${filters.course}`, tone: 'info' }] : []),
+    { key: 'course', label: `Course: ${syllabus.code}`, tone: 'info' },
     ...filters.chapters.map((c) => ({ key: 'chapters', value: c, label: c, tone: 'muted' })),
     ...filters.cos.map((c) => ({ key: 'cos', value: c, label: c, tone: 'info' })),
     ...filters.blooms.map((b) => ({ key: 'blooms', value: b, label: `Bloom: ${b}`, bloom: b })),
@@ -136,19 +135,10 @@ export default function Bank() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className={fieldLabel} htmlFor="course">
-              COURSE
-            </label>
-            <select
-              id="course"
-              className={fieldClass}
-              value={filters.course}
-              onChange={(e) => setFilters((f) => ({ ...f, course: e.target.value }))}
-            >
-              {courses.map((c) => (
-                <option key={c.code}>{c.code}</option>
-              ))}
-            </select>
+            <p className={fieldLabel}>COURSE</p>
+            <p className={`${fieldClass} font-semibold`}>
+              {syllabus.code} · {syllabus.title}
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">
@@ -162,7 +152,7 @@ export default function Bank() {
                     key={chip.label}
                     className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1.5 text-xs font-semibold ${
                       chip.bloom
-                        ? `${bloomTone[chip.bloom]} border-transparent`
+                        ? `${bloomToneFor(chip.bloom)} border-transparent`
                         : chip.tone === 'info'
                           ? 'border-brand/20 bg-brand-soft text-brand'
                           : chip.tone === 'bad'
@@ -270,12 +260,12 @@ export default function Bank() {
                       </button>
                       <span className="text-xs text-ink-3">•</span>
                       <span className="text-xs text-ink-3">
-                        {filters.course} - Chapter {q.chapter}
+                        {syllabus.code} - Chapter {q.chapter}
                       </span>
                     </div>
                     <div className="flex gap-1.5">
                       <Badge tone="info">{q.co}</Badge>
-                      <Badge className={bloomTone[q.bloom]}>{q.bloom}</Badge>
+                      <Badge className={bloomToneFor(q.bloom)}>{q.bloom}</Badge>
                       <Badge tone="muted">{q.difficulty}</Badge>
                     </div>
                   </div>
@@ -362,7 +352,7 @@ export default function Bank() {
           }
         >
           <button
-            onClick={() => setDraft({ ...emptyFilters, keyword: draft.keyword, course: draft.course })}
+            onClick={() => setDraft({ ...emptyFilters, keyword: draft.keyword })}
             className="-mt-2 mb-4 block text-[13px] font-semibold text-brand"
           >
             Clear All
@@ -382,7 +372,7 @@ export default function Bank() {
           />
           <ChipGroup
             label="Bloom's Cognitive Levels"
-            options={bloomLevels}
+            options={bloomNames}
             selected={draft.blooms}
             onToggle={(v) => toggleDraft('blooms', v)}
           />
@@ -421,7 +411,7 @@ export default function Bank() {
                 onClick={() => {
                   setWizard(null)
                   setSelected([])
-                  navigate(tab === 'bulk' ? '/tos' : '/exam-config')
+                  navigate(tab === 'bulk' ? featurePath('tos', syllabus.id) : '/exam-config')
                 }}
               >
                 {tab === 'bulk' ? 'Confirm & Map to TOS' : 'Continue to Exam Setup'}

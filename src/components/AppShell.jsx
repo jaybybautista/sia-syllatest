@@ -1,11 +1,15 @@
-import { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { useContext, useState } from 'react'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import {
   Activity,
+  ArrowLeft,
   Bell,
+  BrainCircuit,
   ClipboardCheck,
   Database,
   FileCheck,
+  FileSpreadsheet,
+  FileText,
   HelpCircle,
   LayoutGrid,
   LineChart,
@@ -18,9 +22,10 @@ import {
   UploadCloud,
   Zap,
 } from 'lucide-react'
-import { useAppState } from '../state/context.js'
+import { SyllabusContext, useAppState } from '../state/context.js'
 import { glass } from './ui.jsx'
-import { chair, term, tokenUsagePct, user } from '../data/mock.js'
+import { accountByRole, term, tokenUsagePct } from '../data/mock.js'
+import { formatDate } from '../data/syllabi.js'
 
 const navByRole = {
   faculty: [
@@ -30,24 +35,19 @@ const navByRole = {
     { to: '/consistency', label: 'Consistency Checker', icon: TriangleAlert },
     { to: '/tos', label: 'TOS Generator', icon: Table },
     { to: '/bank', label: 'Question Bank', icon: Database },
+    { to: '/bloom', label: "My Bloom's Taxonomy", icon: BrainCircuit },
   ],
   chair: [
     { to: '/chair', label: 'Chair Dashboard', icon: LayoutGrid },
     { to: '/approval', label: 'Reviewer Approval', icon: ClipboardCheck },
     { to: '/analysis', label: 'Item Analysis', icon: LineChart },
     { to: '/bank', label: 'Question Bank', icon: Database },
+    { to: '/bloom', label: "My Bloom's Taxonomy", icon: BrainCircuit },
   ],
   admin: [{ to: '/admin', label: 'Admin Control Center', icon: Settings }],
 }
 
 const roleLabel = { faculty: 'Faculty', chair: 'Department Chair', admin: 'Administrator' }
-
-// Each role signs in as a different person, so the account shown follows the active role.
-const accountByRole = {
-  faculty: user,
-  chair,
-  admin: { name: 'ICT Systems Admin', email: 'ict-admin@psu.edu.ph' },
-}
 
 const homeByRole = { faculty: '/dashboard', chair: '/chair', admin: '/admin' }
 
@@ -268,7 +268,10 @@ export default function AppShell({ title, subtitle, actions, children }) {
             </div>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-7 p-8">{children}</div>
+        <div className="flex flex-1 flex-col gap-7 p-8">
+          <OpenSyllabusBar />
+          {children}
+        </div>
       </main>
     </div>
   )
@@ -285,5 +288,38 @@ function MenuItem({ icon: Icon, label, trailing, tone = 'text-ink', onClick }) {
       <span className={`flex-1 text-sm font-medium ${tone}`}>{label}</span>
       {trailing}
     </button>
+  )
+}
+
+// Shown on a feature screen opened from a history list: names the syllabus (or results file) the
+// screen is showing and leads back to the list it came from.
+function OpenSyllabusBar() {
+  const current = useContext(SyllabusContext)
+  if (!current) return null
+  const { syllabus: s, feature } = current
+  const results = feature.results && s.analysis
+  const Icon = feature.results ? FileSpreadsheet : FileText
+  return (
+    <div className={`${glass} -mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl px-4 py-3`}>
+      <Link
+        to={feature.path}
+        className="flex items-center gap-1.5 text-[13px] font-semibold text-brand hover:underline"
+      >
+        <ArrowLeft size={14} />
+        {feature.results ? 'All results files' : 'All uploaded syllabi'}
+      </Link>
+      <span className="h-4 w-px bg-line max-sm:hidden" />
+      <span className="flex min-w-0 items-center gap-2 text-[13px]">
+        <Icon size={14} className="shrink-0 text-ink-3" />
+        <span className="font-bold text-brand">{s.code}</span>
+        <span className="truncate font-semibold">{s.title}</span>
+      </span>
+      <span className="truncate text-xs text-ink-3">
+        {results
+          ? `${s.analysis.file} · uploaded ${formatDate(s.analysis.uploadedOn)}`
+          : `${s.file} · uploaded ${formatDate(s.uploadedOn)}`}{' '}
+        · {s.term}
+      </span>
+    </div>
   )
 }
