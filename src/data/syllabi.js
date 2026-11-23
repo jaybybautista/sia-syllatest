@@ -67,10 +67,14 @@ const elec4 = {
 }
 
 const it312Chapters = [
-  { n: 1, title: 'Foundations of Human-Computer Interaction', hours: 12, co: 'CO 1' },
-  { n: 2, title: 'User Research & Task Analysis', hours: 14, co: 'CO 1' },
-  { n: 3, title: 'Prototyping & Usability Evaluation', hours: 16, co: 'CO 2' },
-  { n: 4, title: 'Accessible & Inclusive Design', hours: 12, co: 'CO 3' },
+  { n: 1, title: 'Foundations of Human-Computer Interaction', hours: 12, co: 'CO 1',
+    topics: 'usability, user experience, affordances, feedback, mental models, Norman design principles, perception, memory, attention, Fitts law, interaction styles' },
+  { n: 2, title: 'User Research & Task Analysis', hours: 14, co: 'CO 1',
+    topics: 'user research, interviews, surveys, personas, scenarios, task analysis, observation, contextual inquiry, requirements gathering, stakeholders, journey maps' },
+  { n: 3, title: 'Prototyping & Usability Evaluation', hours: 16, co: 'CO 2',
+    topics: 'prototypes, wireframes, mockups, low-fidelity and high-fidelity prototyping, heuristic evaluation, Nielsen heuristics, usability testing, think-aloud protocol, cognitive walkthrough, SUS, A/B testing' },
+  { n: 4, title: 'Accessible & Inclusive Design', hours: 12, co: 'CO 3',
+    topics: 'accessibility, WCAG, color contrast, screen readers, alt text, keyboard navigation, ARIA, disabilities, inclusive design, color blindness, captions, assistive technology' },
 ]
 
 const it312 = {
@@ -132,10 +136,10 @@ const it312 = {
       chapter: 1,
       bloom: 'Apply',
       difficulty: 'Easy',
-      text: "Apply Fitts's law: which change most reduces the time needed to hit a primary action on a touch screen?",
+      text: "Apply Fitts law: which change most reduces the time needed to hit a primary action on a touch screen?",
       discrimination: 0.52,
       uses: 4,
-      target: "Fitts's law applied to touch targets.",
+      target: "Fitts law applied to touch targets.",
       choices: [
         { key: 'A', text: 'Make the target larger and place it within the thumb zone.', correct: true },
         { key: 'B', text: 'Add a hover tooltip to the button.', correct: false },
@@ -179,10 +183,14 @@ const it312 = {
 }
 
 const it213Chapters = [
-  { n: 1, title: 'Arrays, Lists & Linked Structures', hours: 16, co: 'CO 1' },
-  { n: 2, title: 'Algorithm Analysis & Big-O', hours: 18, co: 'CO 2' },
-  { n: 3, title: 'Trees & Graphs', hours: 20, co: 'CO 3' },
-  { n: 4, title: 'Sorting & Searching', hours: 18, co: 'CO 4' },
+  { n: 1, title: 'Arrays, Lists & Linked Structures', hours: 16, co: 'CO 1',
+    topics: 'arrays, linked lists, nodes, pointers, head and tail, doubly linked lists, stacks, queues, push, pop, enqueue, dequeue, insertion, deletion, traversal, LIFO, FIFO' },
+  { n: 2, title: 'Algorithm Analysis & Big-O', hours: 18, co: 'CO 2',
+    topics: 'algorithm analysis, Big-O notation, time complexity, space complexity, asymptotic growth, constant, logarithmic, linear, quadratic and exponential time, worst case, best case, average case, nested loops, recursion' },
+  { n: 3, title: 'Trees & Graphs', hours: 20, co: 'CO 3',
+    topics: 'trees, binary trees, binary search trees, BST, root, leaf, height, inorder, preorder and postorder traversal, heaps, graphs, vertices, edges, adjacency matrix, adjacency list, breadth-first search (BFS), depth-first search (DFS), shortest path, Dijkstra, spanning trees' },
+  { n: 4, title: 'Sorting & Searching', hours: 18, co: 'CO 4',
+    topics: 'sorting algorithms, bubble sort, selection sort, insertion sort, merge sort, quicksort, pivot, partitioning, stable sorting, binary search, linear search, hashing, hash tables, hash functions, collisions, separate chaining, open addressing, linear probing, comparisons, swaps' },
 ]
 
 const it213 = {
@@ -305,10 +313,14 @@ const it213 = {
 }
 
 const elec3Chapters = [
-  { n: 1, title: 'Responsive Web Foundations', hours: 20, co: 'CO 1' },
-  { n: 2, title: 'Client-side Scripting & the DOM', hours: 25, co: 'CO 2' },
-  { n: 3, title: 'Mobile UI Frameworks', hours: 25, co: 'CO 2' },
-  { n: 4, title: 'Testing & Publishing Web Apps', hours: 20, co: 'CO 3' },
+  { n: 1, title: 'Responsive Web Foundations', hours: 20, co: 'CO 1',
+    topics: 'semantic HTML, CSS, box model, flexbox, CSS grid, media queries, responsive design, viewport, breakpoints, mobile-first layouts, typography' },
+  { n: 2, title: 'Client-side Scripting & the DOM', hours: 25, co: 'CO 2',
+    topics: 'JavaScript, the DOM, events and event listeners, querySelector, elements, variables, functions, arrays, objects, form validation, DOM manipulation' },
+  { n: 3, title: 'Mobile UI Frameworks', hours: 25, co: 'CO 2',
+    topics: 'UI frameworks, Bootstrap, Tailwind, components, React, Vue, Ionic, mobile navigation, themes, touch gestures' },
+  { n: 4, title: 'Testing & Publishing Web Apps', hours: 20, co: 'CO 3',
+    topics: 'testing, unit tests, automated tests, Jest, Lighthouse audits, performance, debugging, publishing, deployment, hosting, domains, minification, Git version control' },
 ]
 
 const elec3 = {

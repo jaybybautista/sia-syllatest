@@ -94,10 +94,14 @@ export const syllabus = {
     },
   ],
   chapters: [
-    { n: 1, title: 'Web and Mobile Tech stacks', hours: 10, co: 'CO 1' },
-    { n: 2, title: 'Asynchronous Javascript & APIs', hours: 25, co: 'CO 2' },
-    { n: 3, title: 'Cross-platform development structures', hours: 35, co: 'CO 2' },
-    { n: 4, title: 'Cloud Deployment Pipelines', hours: 21, co: 'CO 3' },
+    { n: 1, title: 'Web and Mobile Tech stacks', hours: 10, co: 'CO 1',
+    topics: 'HTML, CSS, responsive layout, viewport, breakpoints, media queries, front-end and back-end stacks, native vs hybrid apps, progressive web apps, browsers and devices' },
+    { n: 2, title: 'Asynchronous Javascript & APIs', hours: 25, co: 'CO 2',
+    topics: 'asynchronous programming, callbacks, promises, async/await, event loop, fetch, Axios, REST APIs, HTTP methods and status codes, JSON, request and response handling, latency' },
+    { n: 3, title: 'Cross-platform development structures', hours: 35, co: 'CO 2',
+    topics: 'cross-platform frameworks, React Native, Flutter, components, widgets, state management, navigation, local storage, offline support, emulators, platform-specific code' },
+    { n: 4, title: 'Cloud Deployment Pipelines', hours: 21, co: 'CO 3',
+    topics: 'cloud hosting, deployment pipelines, CI/CD, containers, Docker, environment variables, authentication tokens, HTTPS and TLS, security, monitoring, scaling, endpoint latency' },
   ],
 }
 

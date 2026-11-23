@@ -21,7 +21,7 @@ const buttonStyles = {
 export function Button({ variant = 'primary', icon: Icon, className = '', children, ...rest }) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-sm font-semibold transition-colors ${buttonStyles[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${buttonStyles[variant]} ${className}`}
       {...rest}
     >
       {Icon && <Icon size={16} />}
@@ -72,7 +72,7 @@ export function Modal({ title, subtitle, icon: Icon, tone, onClose, width = 520,
       aria-label={title}
     >
       <div
-        className="flex max-h-[90vh] flex-col rounded-3xl bg-white shadow-[0_20px_40px_rgba(2,6,23,0.2)]"
+        className="flex max-h-[90vh] max-w-full flex-col rounded-3xl bg-white shadow-[0_20px_40px_rgba(2,6,23,0.2)]"
         style={{ width }}
       >
         <div className="flex items-start justify-between gap-4 px-8 pt-7">

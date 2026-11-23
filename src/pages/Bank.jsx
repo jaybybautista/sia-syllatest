@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, Plus, SlidersHorizontal, TriangleAlert, X } from 'lucide-react'
+import { Check, CircleCheck, FileUp, Plus, SlidersHorizontal, TriangleAlert, X } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Badge, Button, Card, Modal } from '../components/ui.jsx'
+import QuestionImport from '../components/QuestionImport.jsx'
 import { difficultyLevels, discriminationLabel, user } from '../data/mock.js'
 import { bloomToneFor } from '../data/bloom.js'
 import { featurePath } from '../data/features.js'
 import { useAppState, useSyllabus } from '../state/context.js'
+import { questionTypes as types } from '../lib/questionParser.js'
 
-const types = ['Multiple Choice', 'Short Answer', 'Code Writing']
+// Items seeded before types were recorded are all multiple choice.
+const typeOf = (q) => q.type ?? 'Multiple Choice'
 
 const fieldClass =
   'w-full rounded-lg border border-white/40 bg-white/70 p-2.5 text-[13px] text-ink backdrop-blur-[6px]'
@@ -27,7 +30,7 @@ const emptyFilters = {
 export default function Bank() {
   const navigate = useNavigate()
   const { syllabus } = useSyllabus()
-  const { bloomLevels } = useAppState()
+  const { bloomLevels, updateSyllabus } = useAppState()
   const { bankItems, bankTotal } = syllabus
   const bloomNames = bloomLevels.map((l) => l.name)
   // Figma's wizard listed Q-312 as "Analyze" and Q-313 as "Create", the reverse of the bank list on
@@ -45,6 +48,8 @@ export default function Bank() {
   const [cell, setCell] = useState(matrixCells[3] ?? matrixCells[0])
   const [weight, setWeight] = useState('10')
   const [points, setPoints] = useState('5')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
 
   function matches(q, f) {
     if (f.keyword && !q.text.toLowerCase().includes(f.keyword.toLowerCase())) return false
@@ -52,6 +57,7 @@ export default function Bank() {
     if (f.cos.length && !f.cos.includes(q.co)) return false
     if (f.blooms.length && !f.blooms.includes(q.bloom)) return false
     if (f.difficulties.length && !f.difficulties.includes(q.difficulty)) return false
+    if (f.types.length && !f.types.includes(typeOf(q))) return false
     return true
   }
 
@@ -61,7 +67,7 @@ export default function Bank() {
     [bankItems, draft],
   )
 
-  const preview = bankItems.find((q) => q.id === previewId)
+  const preview = bankItems.find((q) => q.id === previewId) ?? bankItems[0]
   const flagged = results.find((q) => q.similarity)
   const allShownSelected = results.length > 0 && results.every((q) => selected.includes(q.id))
   const selectedItems = bankItems.filter((q) => selected.includes(q.id))
@@ -211,17 +217,42 @@ export default function Bank() {
                 Bulk Add to Midterm TOS
               </Button>
             </div>
-            <Button
-              variant="accent"
-              icon={Plus}
-              onClick={() => {
-                setTab('new')
-                setWizard(true)
-              }}
-            >
-              Create New Exam Set
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="ghost" icon={FileUp} onClick={() => setImporting(true)}>
+                Import from Exam File
+              </Button>
+              <Button
+                variant="accent"
+                icon={Plus}
+                onClick={() => {
+                  setTab('new')
+                  setWizard(true)
+                }}
+              >
+                Create New Exam Set
+              </Button>
+            </div>
           </div>
+
+          {importResult && (
+            <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-ok-bg p-4">
+              <CircleCheck size={16} className="mt-0.5 shrink-0 text-ok" />
+              <p className="min-w-0 flex-1 text-[13px]">
+                <span className="font-bold text-ok">
+                  Added {importResult.items.length} question{importResult.items.length === 1 ? '' : 's'} from{' '}
+                  {importResult.file}.
+                </span>{' '}
+                {importResult.fills} filled empty TOS slots and{' '}
+                {importResult.items.length - importResult.fills} were kept as reserve items.{' '}
+                {importResult.gapAfter > 0
+                  ? `${importResult.gapAfter} TOS slots are still empty.`
+                  : 'Every TOS slot now has a bank item.'}
+              </p>
+              <button aria-label="Dismiss" onClick={() => setImportResult(null)} className="text-ink-3">
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           {flagged && (
             <div className="flex items-center gap-3 rounded-lg border border-accent bg-warn-bg p-4">
@@ -241,7 +272,7 @@ export default function Bank() {
               </Card>
             )}
             {results.map((q) => {
-              const d = discriminationLabel(q.discrimination)
+              const d = q.discrimination == null ? null : discriminationLabel(q.discrimination)
               return (
                 <Card key={q.id} className="flex flex-col gap-4 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -260,10 +291,15 @@ export default function Bank() {
                       </button>
                       <span className="text-xs text-ink-3">•</span>
                       <span className="text-xs text-ink-3">
-                        {syllabus.code} - Chapter {q.chapter}
+                        {syllabus.code} - Chapter {q.chapter} · {typeOf(q)}
                       </span>
                     </div>
-                    <div className="flex gap-1.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      {q.imported && (
+                        <Badge tone={q.imported.fillsGap ? 'ok' : 'muted'}>
+                          {q.imported.fillsGap ? 'Imported · fills TOS gap' : 'Imported · reserve'}
+                        </Badge>
+                      )}
                       <Badge tone="info">{q.co}</Badge>
                       <Badge className={bloomToneFor(q.bloom)}>{q.bloom}</Badge>
                       <Badge tone="muted">{q.difficulty}</Badge>
@@ -271,12 +307,16 @@ export default function Bank() {
                   </div>
                   <p className="text-sm font-medium leading-[1.5]">{q.text}</p>
                   <div className="flex items-center justify-between text-xs text-ink-3">
-                    <p>
-                      discrimination score:{' '}
-                      <span className={`font-bold ${d.tone}`}>
-                        {q.discrimination.toFixed(2)} ({d.label})
-                      </span>
-                    </p>
+                    {d ? (
+                      <p>
+                        discrimination score:{' '}
+                        <span className={`font-bold ${d.tone}`}>
+                          {q.discrimination.toFixed(2)} ({d.label})
+                        </span>
+                      </p>
+                    ) : (
+                      <p>discrimination score: not yet measured</p>
+                    )}
                     <p>
                       Historical Use: {q.uses} {q.uses === 1 ? 'time' : 'times'}
                       {q.uses === 0 && ' (New)'}
@@ -299,7 +339,14 @@ export default function Bank() {
             <p className="text-[13px] font-medium">{preview.target}</p>
           </div>
           <div className="flex flex-col gap-2">
-            <p className="text-[11px] text-ink-3">CHOICES &amp; KEY MAPPING</p>
+            <p className="text-[11px] text-ink-3">
+              {preview.choices.length ? 'CHOICES & KEY MAPPING' : 'ANSWER KEY'}
+            </p>
+            {preview.choices.length === 0 && (
+              <p className="rounded-lg border border-white/40 bg-white/70 p-2.5 text-xs text-ink-2">
+                {preview.answer || `${typeOf(preview)} item, scored with a rubric.`}
+              </p>
+            )}
             {preview.choices.map((c) => (
               <div
                 key={c.key}
@@ -389,6 +436,24 @@ export default function Bank() {
             onToggle={(v) => toggleDraft('types', v)}
           />
         </Modal>
+      )}
+
+      {importing && (
+        <QuestionImport
+          syllabus={syllabus}
+          onClose={() => setImporting(false)}
+          onImport={(result) => {
+            updateSyllabus(syllabus.id, (s) => ({
+              bankItems: [...result.items, ...s.bankItems],
+              bankTotal: s.bankTotal + result.items.length,
+            }))
+            setImporting(false)
+            setImportResult(result)
+            setFilters(emptyFilters)
+            setDraft(emptyFilters)
+            setPreviewId(result.items[0].id)
+          }}
+        />
       )}
 
       {wizard && (
