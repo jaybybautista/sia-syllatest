@@ -1,32 +1,23 @@
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, CircleAlert, Plus } from 'lucide-react'
-import { chair, user } from '../data/mock.js'
+import { ArrowLeft, CircleAlert } from 'lucide-react'
+import { demoAccounts, homeByRole } from '../data/accounts.js'
 import { useAppState } from '../state/context.js'
 
-// Figma listed a second account, "Evelyn Ramos (Academic Audit)", badged Chairperson — the same
-// person as the faculty account. The chair is a separate account here.
-const accounts = [
-  { name: user.name, email: user.email, badge: 'Faculty', role: 'faculty', tone: 'brand' },
-  { name: chair.name, email: chair.email, badge: 'Chairperson', role: 'chair', tone: 'accent' },
-  {
-    name: 'ICT Systems Admin',
-    email: 'ict-admin@psu.edu.ph',
-    badge: 'Administrator',
-    role: 'admin',
-    tone: 'brand',
-  },
-]
-
-const home = { faculty: '/dashboard', chair: '/chair', admin: '/admin' }
+// The demo accounts. Each signs in with its own fixed role; the role decides the home screen.
+const badges = { faculty: 'Faculty', chair: 'Chairperson', admin: 'Administrator' }
+const accounts = demoAccounts.map((a) => ({
+  ...a,
+  badge: badges[a.role],
+  tone: a.role === 'chair' ? 'accent' : 'brand',
+}))
 
 export default function Sso() {
   const navigate = useNavigate()
-  const { setRole, setSignedIn } = useAppState()
+  const { signIn } = useAppState()
 
   function choose(account) {
-    setRole(account.role)
-    setSignedIn(true)
-    navigate(home[account.role])
+    signIn(account.email)
+    navigate(homeByRole[account.role])
   }
 
   return (
@@ -78,18 +69,6 @@ export default function Sso() {
               </span>
             </button>
           ))}
-
-          <button
-            onClick={() => choose(accounts[0])}
-            className="flex items-center gap-4 rounded-xl border border-dashed border-line p-4 text-left hover:border-brand"
-          >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100">
-              <Plus size={20} className="text-ink-2" />
-            </span>
-            <span className="text-[15px] font-semibold text-ink-2">
-              Use another PSU G-Suite account
-            </span>
-          </button>
         </div>
 
         <div className="flex items-center gap-3 rounded-xl border border-accent/20 bg-accent/10 p-4">

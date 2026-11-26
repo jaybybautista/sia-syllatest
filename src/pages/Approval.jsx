@@ -54,7 +54,7 @@ function revisionReasonsFor(syllabus, coverage, computedHours) {
 export default function Approval() {
   const navigate = useNavigate()
   const { syllabus } = useSyllabus()
-  const { updateSyllabus } = useAppState()
+  const { updateSyllabus, logActivity } = useAppState()
   const course = syllabus
   const author = { name: syllabus.instructor }
   const computedHours = syllabus.chapters.reduce((sum, c) => sum + c.hours, 0)
@@ -68,6 +68,13 @@ export default function Approval() {
   const state = syllabus.review.state
   function setState(next) {
     updateSyllabus(syllabus.id, (s) => ({ review: { ...s.review, state: next } }))
+    const verb = {
+      Approved: `approved and locked the ${syllabus.code} blueprint`,
+      Revisions: `requested revisions on ${syllabus.code}`,
+      'For Review': `returned ${syllabus.code} to the review queue`,
+      Draft: `moved ${syllabus.code} back to draft`,
+    }[next]
+    logActivity({ syllabusId: syllabus.id, code: syllabus.code, text: verb })
   }
   const [checks, setChecks] = useState({ hours: true, outcomes: false, duplicates: true, bloom: true })
   const [requesting, setRequesting] = useState(false)

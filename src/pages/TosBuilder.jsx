@@ -11,7 +11,7 @@ const splits = ['Lecture Split (60%)', 'Laboratory Split (40%)']
 
 export default function TosBuilder() {
   const navigate = useNavigate()
-  const { examConfig, bloomLevels, updateSyllabus } = useAppState()
+  const { examConfig, bloomLevels, updateSyllabus, logActivity } = useAppState()
   const { syllabus } = useSyllabus()
   const course = syllabus
   const tosLocked = syllabus.tosLocked
@@ -191,6 +191,11 @@ export default function TosBuilder() {
               <Button
                 onClick={() => {
                   updateSyllabus(syllabus.id, { tosLocked: true })
+                  logActivity({
+                    syllabusId: syllabus.id,
+                    code: syllabus.code,
+                    text: `locked the ${examConfig.examType} TOS for ${syllabus.code}`,
+                  })
                   setConfirmLock(false)
                   navigate('/generation')
                 }}

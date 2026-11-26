@@ -6,7 +6,6 @@ import {
   analysisStats,
   attainment,
   bankItems,
-  bankTotal,
   cohortSize,
   complianceScore,
   findings,
@@ -42,7 +41,6 @@ const elec4 = {
   complianceScore,
   findings: findings.map((f) => (f.id === 'MAP-012' ? { ...f, targetCo: 'CO 3' } : f)),
   bankItems,
-  bankTotal,
   tosLocked: false,
   review: {
     state: 'For Review',
@@ -147,7 +145,6 @@ const it312 = {
       ],
     },
   ]),
-  bankTotal: 96,
   tosLocked: true,
   review: { state: 'Approved', thread: null },
   analysis: {
@@ -306,7 +303,6 @@ const it213 = {
       ],
     },
   ]),
-  bankTotal: 64,
   tosLocked: false,
   review: { state: 'For Review', thread: null },
   analysis: null,
@@ -378,7 +374,6 @@ const elec3 = {
       ],
     },
   ]),
-  bankTotal: 112,
   tosLocked: true,
   review: { state: 'Approved', thread: null },
   analysis: {
@@ -423,7 +418,7 @@ export function formatDate(iso) {
  * content is taken from the latest upload of the same course (or ELEC 4 for a new course); the
  * file, course and term are the ones the user entered.
  */
-export function createSyllabusRecord(list, { code, title, term: termLabel, file, fileSize }) {
+export function createSyllabusRecord(list, { code, title, term: termLabel, file, fileSize, uploader }) {
   const base = latestForCode(list, code) ?? elec4
   const stamp = Date.now().toString(36)
   return {
@@ -435,7 +430,9 @@ export function createSyllabusRecord(list, { code, title, term: termLabel, file,
     file,
     fileSize,
     uploadedOn: new Date().toISOString(),
-    uploadedBy: user.name,
+    // The faculty member who uploads a syllabus is the one who teaches it.
+    uploadedBy: uploader.name,
+    instructor: uploader.name,
     tosLocked: false,
     review: { state: 'Draft', thread: null },
     analysis: null,

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   BookOpen,
@@ -37,7 +37,7 @@ const label = 'text-xs font-bold text-ink-2'
 
 export default function Upload() {
   const navigate = useNavigate()
-  const { syllabi, addSyllabus } = useAppState()
+  const { syllabi, addSyllabus, account, logActivity } = useAppState()
   const fileInput = useRef(null)
   const groundingInput = useRef(null)
 
@@ -47,11 +47,20 @@ export default function Upload() {
   const [dragging, setDragging] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
+  // The record being parsed; once the progress bar completes, its verification screen opens.
+  const [parsedId, setParsedId] = useState(null)
+
+  const timer = useRef(null)
+
+  useEffect(() => {
+    if (parsedId && progress >= 100) navigate(featurePath('verification', parsedId))
+  }, [parsedId, progress, navigate])
+  useEffect(() => () => clearInterval(timer.current), [])
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [meta, setMeta] = useState({
     code: 'ELEC 4',
     title: 'Special Topics on Web and Mobile 2',
-    term: `2nd Semester, AY ${term.label.split('A.Y. ')[1]}`,
+    term: term.label,
   })
 
   function pickFile(selected) {
@@ -76,18 +85,25 @@ export default function Upload() {
       term: meta.term.trim() || term.label,
       file: file.name,
       fileSize: Number(file.size),
+      uploader: account,
     })
     addSyllabus(record)
+    logActivity({ syllabusId: record.id, code: record.code, text: `uploaded ${record.file} for ${record.code}` })
+    logActivity({
+      ai: true,
+      syllabusId: record.id,
+      code: record.code,
+      text: `Parsed ${record.file}: ${record.outcomes.length} course outcomes, ${record.chapters.length} chapters`,
+    })
     setProcessing(true)
     setProgress(0)
-    const timer = setInterval(() => {
+    setParsedId(record.id)
+    clearInterval(timer.current)
+    timer.current = setInterval(() => {
       setProgress((p) => {
-        if (p >= 100) {
-          clearInterval(timer)
-          navigate(featurePath('verification', record.id))
-          return 100
-        }
-        return p + 5
+        const next = Math.min(100, p + 5)
+        if (next >= 100) clearInterval(timer.current)
+        return next
       })
     }, 120)
   }
@@ -289,12 +305,19 @@ export default function Upload() {
                 <label className={label} htmlFor="term">
                   ACADEMIC YEAR &amp; TERM
                 </label>
-                <input
+                {/* A fixed list, so uploads always match the term the dashboards report on. */}
+                <select
                   id="term"
                   className={field}
                   value={meta.term}
                   onChange={(e) => setMeta({ ...meta, term: e.target.value })}
-                />
+                >
+                  {[...new Set([term.label, ...syllabi.map((s) => s.term)])].map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             <Button className="w-full" disabled={!file || processing} onClick={proceed}>

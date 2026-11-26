@@ -10,7 +10,7 @@ const discriminationWord = (v) =>
   v >= 0.4 ? 'Very Good' : v >= 0.3 ? 'Good' : v >= 0.15 ? 'Poor' : 'Very Poor'
 
 export default function Analysis() {
-  const { examConfig, updateSyllabus } = useAppState()
+  const { examConfig, updateSyllabus, logActivity } = useAppState()
   const { syllabus } = useSyllabus()
   const course = syllabus
   const outcomeText = Object.fromEntries(
@@ -50,6 +50,12 @@ export default function Analysis() {
           ? { ...s.analysis, file: results.name, uploadedOn: new Date().toISOString() }
           : sampleAnalysis(s, results.name),
       }))
+      logActivity({
+        ai: true,
+        syllabusId: syllabus.id,
+        code: syllabus.code,
+        text: `Analysed ${results.name} for ${syllabus.code}`,
+      })
     }
     setMapping(false)
   }

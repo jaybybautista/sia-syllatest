@@ -6,6 +6,7 @@ import { Badge, Button, Card } from './ui.jsx'
 import { useAppState } from '../state/context.js'
 import { featurePath, features } from '../data/features.js'
 import { formatDate } from '../data/syllabi.js'
+import { isOwnedBy } from '../data/insights.js'
 
 const hoursOf = (s) => s.chapters.reduce((sum, c) => sum + c.hours, 0)
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`
@@ -30,7 +31,7 @@ const statusFor = {
     s.tosLocked
       ? { tone: 'info', label: 'TOS locked', note: plural(s.chapters.length, 'chapter') }
       : { tone: 'muted', label: 'Draft', note: `${plural(s.chapters.length, 'chapter')} · ${hoursOf(s)} hrs` },
-  bank: (s) => ({ tone: 'info', label: plural(s.bankTotal, 'item'), note: plural(s.outcomes.length, 'course outcome') }),
+  bank: (s) => ({ tone: 'info', label: plural(s.bankItems.length, 'item'), note: plural(s.outcomes.length, 'course outcome') }),
   approval: (s) => ({
     tone: { Approved: 'ok', Revisions: 'bad', 'For Review': 'warn' }[s.review.state] ?? 'muted',
     label: s.review.state,
@@ -48,7 +49,12 @@ const statusFor = {
 
 export default function SyllabusHistory({ feature }) {
   const navigate = useNavigate()
-  const { syllabi, role } = useAppState()
+  const { syllabi: all, role, account } = useAppState()
+  // Faculty see the syllabi they teach or uploaded; the chair sees the whole department.
+  const syllabi = useMemo(
+    () => (role === 'faculty' ? all.filter((s) => isOwnedBy(s, account)) : all),
+    [all, role, account],
+  )
   const config = features[feature]
   const [query, setQuery] = useState('')
   const [termFilter, setTermFilter] = useState('all')

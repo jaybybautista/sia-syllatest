@@ -30,8 +30,8 @@ const emptyFilters = {
 export default function Bank() {
   const navigate = useNavigate()
   const { syllabus } = useSyllabus()
-  const { bloomLevels, updateSyllabus } = useAppState()
-  const { bankItems, bankTotal } = syllabus
+  const { bloomLevels, updateSyllabus, logActivity } = useAppState()
+  const { bankItems } = syllabus
   const bloomNames = bloomLevels.map((l) => l.name)
   // Figma's wizard listed Q-312 as "Analyze" and Q-313 as "Create", the reverse of the bank list on
   // the same data. The bank record is treated as the source of truth and the wizard reads from it.
@@ -203,7 +203,7 @@ export default function Bank() {
                 {allShownSelected && <Check size={10} className="text-white" />}
               </button>
               <p className="text-[13px] font-semibold">
-                Selected {selected.length} of {bankTotal} items
+                Selected {selected.length} of {bankItems.length} items
               </p>
               <Button
                 variant="ghost"
@@ -443,10 +443,13 @@ export default function Bank() {
           syllabus={syllabus}
           onClose={() => setImporting(false)}
           onImport={(result) => {
-            updateSyllabus(syllabus.id, (s) => ({
-              bankItems: [...result.items, ...s.bankItems],
-              bankTotal: s.bankTotal + result.items.length,
-            }))
+            updateSyllabus(syllabus.id, (s) => ({ bankItems: [...result.items, ...s.bankItems] }))
+            logActivity({
+              ai: true,
+              syllabusId: syllabus.id,
+              code: syllabus.code,
+              text: `Extracted ${result.items.length} questions from ${result.file} into the ${syllabus.code} bank (${result.fills} filled TOS gaps)`,
+            })
             setImporting(false)
             setImportResult(result)
             setFilters(emptyFilters)

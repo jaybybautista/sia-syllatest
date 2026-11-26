@@ -17,13 +17,6 @@ export const chair = {
   role: 'Department Chair / Audit Lead',
 }
 
-// Each role signs in as a different person, so the account shown follows the active role.
-export const accountByRole = {
-  faculty: user,
-  chair,
-  admin: { name: 'ICT Systems Admin', email: 'ict-admin@psu.edu.ph' },
-}
-
 export const term = {
   label: '2nd Sem, A.Y. 2023-2024',
   long: 'Second Semester, Academic Year 2023 - 2024',
@@ -180,6 +173,13 @@ export const findings = [
 
 export const severityTone = { CRITICAL: 'bad', MEDIUM: 'warn', LOW: 'muted' }
 
+// The department's deadlines for the active term. Whether each is met is worked out from the
+// syllabi: `tos` needs every TOS locked, `bank` needs the bank to fill every TOS slot.
+export const termDeadlines = [
+  { id: 'midterm-tos', due: '2024-03-15', label: 'Midterm TOS Submission', check: 'tos' },
+  { id: 'midterm-bank', due: '2024-03-20', label: 'Midterm Exam Diagnostic Bank', check: 'bank' },
+]
+
 export const deadlines = [
   { date: 'Mar 15', label: 'Midterm TOS Submission', note: 'Critical', critical: true },
   { date: 'Mar 20', label: 'Midterm Exam Diagnostic Bank', note: 'Upcoming', critical: false },
@@ -323,7 +323,6 @@ export const bankItems = [
   },
 ].map((item) => ({ ...item, co: coForChapter[item.chapter] }))
 
-export const bankTotal = 150
 
 // Authored difficulty uses four levels (the filter popover offers Easy/Medium/Hard/Advanced).
 // This is distinct from the computed difficulty *index* on the analysis screen, which is a

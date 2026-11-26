@@ -14,17 +14,17 @@ import {
   LayoutGrid,
   LineChart,
   LogOut,
-  RefreshCw,
+  RotateCcw,
   Settings,
   Settings2,
   Table,
   TriangleAlert,
   UploadCloud,
-  Zap,
 } from 'lucide-react'
 import { SyllabusContext, useAppState } from '../state/context.js'
-import { glass } from './ui.jsx'
-import { accountByRole, term, tokenUsagePct } from '../data/mock.js'
+import { Button, Modal, glass } from './ui.jsx'
+import { term } from '../data/mock.js'
+import { initialsOf, roleLabel } from '../data/accounts.js'
 import { formatDate } from '../data/syllabi.js'
 
 const navByRole = {
@@ -47,29 +47,15 @@ const navByRole = {
   admin: [{ to: '/admin', label: 'Admin Control Center', icon: Settings }],
 }
 
-const roleLabel = { faculty: 'Faculty', chair: 'Department Chair', admin: 'Administrator' }
-
-const homeByRole = { faculty: '/dashboard', chair: '/chair', admin: '/admin' }
 
 export default function AppShell({ title, subtitle, actions, children }) {
-  const { role, setRole, setSignedIn } = useAppState()
+  // The role comes from the signed-in account; using another role means signing in as that account.
+  const { account, role, signOut, resetDemoData } = useAppState()
   const [menuOpen, setMenuOpen] = useState(false)
-  const roleOrder = ['faculty', 'chair', 'admin']
-  const nextRole = roleOrder[(roleOrder.indexOf(role) + 1) % roleOrder.length]
+  const [confirmReset, setConfirmReset] = useState(false)
   const navigate = useNavigate()
   const nav = navByRole[role]
-  const account = accountByRole[role]
-  const initials = account.name
-    .split(' ')
-    .filter((w) => !w.endsWith('.'))
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-
-  function switchRole(next) {
-    setRole(next)
-    navigate(homeByRole[next])
-  }
+  const initials = initialsOf(account.name)
 
   return (
     <div className="flex min-h-screen items-stretch">
@@ -162,19 +148,6 @@ export default function AppShell({ title, subtitle, actions, children }) {
                       }}
                     />
                     <MenuItem
-                      icon={Zap}
-                      label="AI Token Usage"
-                      trailing={
-                        <span className="text-xs font-semibold text-accent-dark">
-                          {tokenUsagePct}% limit
-                        </span>
-                      }
-                      onClick={() => {
-                        setMenuOpen(false)
-                        navigate(role === 'admin' ? '/admin' : '/profile')
-                      }}
-                    />
-                    <MenuItem
                       icon={Activity}
                       label="Audit Trail Activity"
                       onClick={() => {
@@ -183,11 +156,11 @@ export default function AppShell({ title, subtitle, actions, children }) {
                       }}
                     />
                     <MenuItem
-                      icon={RefreshCw}
-                      label={`Switch Role (${roleLabel[nextRole]})`}
+                      icon={RotateCcw}
+                      label="Reset Demo Data"
                       onClick={() => {
                         setMenuOpen(false)
-                        switchRole(nextRole)
+                        setConfirmReset(true)
                       }}
                     />
                   </div>
@@ -200,7 +173,7 @@ export default function AppShell({ title, subtitle, actions, children }) {
                     tone="text-bad"
                     onClick={() => {
                       setMenuOpen(false)
-                      setSignedIn(false)
+                      signOut()
                       navigate('/signin')
                     }}
                   />
@@ -236,19 +209,6 @@ export default function AppShell({ title, subtitle, actions, children }) {
           </div>
           <div className="flex items-center gap-5">
             {actions}
-            <label className="flex items-center gap-2 text-[11px] font-bold text-ink-3">
-              VIEW AS
-              <select
-                aria-label="Switch role"
-                value={role}
-                onChange={(e) => switchRole(e.target.value)}
-                className="rounded-md border border-line bg-white/70 px-2 py-1.5 text-xs font-semibold text-ink"
-              >
-                <option value="faculty">Faculty</option>
-                <option value="chair">Department Chair</option>
-                <option value="admin">Administrator</option>
-              </select>
-            </label>
             <span className="rounded-full border border-brand/20 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand">
               {term.label}
             </span>
@@ -275,6 +235,39 @@ export default function AppShell({ title, subtitle, actions, children }) {
           {children}
         </div>
       </main>
+
+      {confirmReset && (
+        <Modal
+          title="Reset the demo data?"
+          icon={RotateCcw}
+          tone="warn"
+          onClose={() => setConfirmReset(false)}
+          width={480}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setConfirmReset(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  resetDemoData()
+                  setConfirmReset(false)
+                  navigate('/')
+                }}
+              >
+                Reset Data
+              </Button>
+            </>
+          }
+        >
+          <p className="leading-[22px]">
+            Every account goes back to the original syllabi: uploads, TOS locks, review decisions,
+            imported questions and results analyses made in this browser are removed. Custom
+            Bloom&apos;s levels are kept.
+          </p>
+        </Modal>
+      )}
     </div>
   )
 }
