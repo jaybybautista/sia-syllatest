@@ -175,11 +175,22 @@ export function createClassifier({ syllabus, levels, chapters = syllabus.chapter
 
     // Bloom level
     const evidenceByLevel = levels.map(() => [])
+    // True or false and identification items are statements, not instructions: "Mobile-first
+    // design starts with…" does not ask the student to design, so only an opening verb counts.
+    const statement = q.type === 'True or False' || q.type === 'Short Answer'
     const bloomScores = levelCues.map((cues, i) => {
       let score = 0
       for (const v of cues.verbs) {
         // An instruction verb that opens the question ("Justify why…") outweighs one further in.
-        const weight = v.first.test(q.text) ? 4 : v.leadOnly ? 0 : v.early.test(q.text) ? 2.5 : v.any.test(q.text) ? 1.25 : 0
+        const weight = v.first.test(q.text)
+          ? 4
+          : v.leadOnly || statement
+            ? 0
+            : v.early.test(q.text)
+              ? 2.5
+              : v.any.test(q.text)
+                ? 1.25
+                : 0
         if (weight) {
           score += weight
           evidenceByLevel[i].push(`“${v.word}”`)

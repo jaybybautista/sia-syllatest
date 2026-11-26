@@ -95,13 +95,13 @@ export const syllabus = {
   ],
   chapters: [
     { n: 1, title: 'Web and Mobile Tech stacks', hours: 10, co: 'CO 1',
-    topics: 'HTML, CSS, responsive layout, viewport, breakpoints, media queries, front-end and back-end stacks, native vs hybrid apps, progressive web apps, browsers and devices' },
+    topics: 'HTML, CSS, responsive layout, viewport meta tag, breakpoints, media queries, mobile-first design, front-end and back-end stacks, choosing a tech stack, native vs hybrid apps, progressive web apps, service workers, browsers and devices' },
     { n: 2, title: 'Asynchronous Javascript & APIs', hours: 25, co: 'CO 2',
-    topics: 'asynchronous programming, callbacks, promises, async/await, event loop, fetch, Axios, REST APIs, HTTP methods and status codes, JSON, request and response handling, latency' },
+    topics: 'asynchronous programming, callbacks, promises, async/await, event loop, microtasks, setTimeout, Promise.all, fetch, Axios, REST APIs, HTTP methods (GET, POST, PATCH, DELETE), HTTP status codes, JSON, request and response handling, error handling, caching API responses, latency' },
     { n: 3, title: 'Cross-platform development structures', hours: 35, co: 'CO 2',
-    topics: 'cross-platform frameworks, React Native, Flutter, components, widgets, state management, navigation, local storage, offline support, emulators, platform-specific code' },
+    topics: 'cross-platform frameworks, React Native, Flutter, Expo, JSX components, props and state, hooks (useState, useEffect), re-rendering, widgets, user interface styling, lists (FlatList), navigation (stack and tab navigators), local storage (AsyncStorage), offline support and sync, emulators and simulators, Fast Refresh, platform-specific code (Platform.OS), Android and iOS builds, package.json dependencies' },
     { n: 4, title: 'Cloud Deployment Pipelines', hours: 21, co: 'CO 3',
-    topics: 'cloud hosting, deployment pipelines, CI/CD, containers, Docker, environment variables, authentication tokens, HTTPS and TLS, security, monitoring, scaling, endpoint latency' },
+    topics: 'cloud hosting, deployment pipelines, CI/CD, build and test stages, containers, Docker, environment variables, secrets management, API keys, authentication tokens, secure storage, HTTPS and TLS, security, blue-green and rolling deployments, health checks, rollback, monitoring, server load, scaling, endpoint latency' },
   ],
 }
 

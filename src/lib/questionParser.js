@@ -65,7 +65,7 @@ function cleanChoice(key, raw) {
  * merges a separator into a dot ("7.B.8.C"), so entries may also be split by dots.
  */
 function parseKeyLine(line, keys) {
-  const pairs = [...line.matchAll(/(\d{1,3})\s*[.):-]?\s*([A-E]\b|true\b|false\b|[A-Za-z][\w\s()-]*?)(?=[\s.,;]+\d{1,3}\s*[.):-]|\s*[,;]|[\s.]*$)/gi)]
+  const pairs = [...line.matchAll(/(\d{1,3})\s*[.):-]?\s*([A-E]\b|true\b|false\b|[A-Za-z][\w\s()./+#-]*?)(?=[\s.,;]+\d{1,3}\s*[.):-]|\s*[,;]|[\s.]*$)/gi)]
   pairs.forEach(([, n, value]) => keys.set(Number(n), value.trim()))
 }
 
@@ -101,7 +101,8 @@ export function parseQuestions(raw) {
   }
 
   for (const line of lines) {
-    if (!line) continue
+    // Blank lines and answer lines ("________") carry no question text.
+    if (!line || /^[_\-.\s]+$/.test(line)) continue
 
     if (answerKeyHeading.test(line)) {
       finish()
