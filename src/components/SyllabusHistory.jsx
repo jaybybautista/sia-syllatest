@@ -6,7 +6,7 @@ import { Badge, Button, Card } from './ui.jsx'
 import { useAppState } from '../state/context.js'
 import { featurePath, features } from '../data/features.js'
 import { formatDate } from '../data/syllabi.js'
-import { isOwnedBy } from '../data/insights.js'
+import { fileSizeLabel, isOwnedBy } from '../data/insights.js'
 
 const hoursOf = (s) => s.chapters.reduce((sum, c) => sum + c.hours, 0)
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`
@@ -169,7 +169,7 @@ export default function SyllabusHistory({ feature }) {
                         <span className="text-brand">{s.code}</span> · {s.title}
                       </p>
                       <p className="truncate text-[11px] text-ink-3">
-                        {s.file} · {s.fileSize} MB
+                        {s.file} · {fileSizeLabel(s.fileSize)}
                       </p>
                     </>
                   )}

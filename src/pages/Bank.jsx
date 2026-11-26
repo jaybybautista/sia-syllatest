@@ -42,7 +42,7 @@ export default function Bank() {
   const [draft, setDraft] = useState(emptyFilters)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [selected, setSelected] = useState([])
-  const [previewId, setPreviewId] = useState(bankItems[0].id)
+  const [previewId, setPreviewId] = useState(bankItems[0]?.id ?? null)
   const [wizard, setWizard] = useState(null)
   const [tab, setTab] = useState('bulk')
   const [cell, setCell] = useState(matrixCells[3] ?? matrixCells[0])
@@ -268,7 +268,9 @@ export default function Bank() {
           <div className="flex flex-col gap-3">
             {results.length === 0 && (
               <Card className="p-6 text-[13px] text-ink-3">
-                No items match these filters. Reset the filters or widen the Bloom level.
+                {bankItems.length === 0
+                  ? 'No questions in this bank yet. Import an exam file to add some.'
+                  : 'No items match these filters. Reset the filters or widen the Bloom level.'}
               </Card>
             )}
             {results.map((q) => {
@@ -331,9 +333,17 @@ export default function Bank() {
         <Card className="flex w-[340px] shrink-0 flex-col gap-5 p-5 max-xl:w-full">
           <div className="flex items-center justify-between">
             <p className="text-sm font-bold">ITEM PREVIEW</p>
-            <p className="text-xs font-semibold text-ink-3">{preview.id}</p>
+            <p className="text-xs font-semibold text-ink-3">{preview?.id}</p>
           </div>
           <hr className="border-line" />
+          {!preview ? (
+            <p className="text-[13px] text-ink-3">
+              This bank has no items yet. Use “Import from Exam File” to add questions from an
+              existing exam; they are tagged to this syllabus&apos;s chapters, outcomes and Bloom&apos;s
+              levels.
+            </p>
+          ) : (
+          <>
           <div>
             <p className="text-[11px] text-ink-3">PROMPT TARGET</p>
             <p className="text-[13px] font-medium">{preview.target}</p>
@@ -359,6 +369,8 @@ export default function Bank() {
               </div>
             ))}
           </div>
+          </>
+          )}
           <div>
             <p className="text-[11px] text-ink-3">SHARING SCOPE</p>
             <p className="mt-1.5 rounded-lg border border-white/40 bg-white/70 p-2.5 text-xs font-semibold">

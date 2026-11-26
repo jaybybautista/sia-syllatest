@@ -118,3 +118,9 @@ export function deadlineState(deadline, list, examConfig, levels) {
     tone: 'text-bad',
   }
 }
+
+/** "37 KB" for small files, "3.8 MB" otherwise. Sizes are stored in MB. */
+export function fileSizeLabel(mb) {
+  if (mb == null) return ''
+  return mb < 1 ? `${Math.max(1, Math.round(mb * 1024))} KB` : `${mb.toFixed(1)} MB`
+}

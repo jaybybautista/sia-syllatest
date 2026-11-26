@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   BookOpen,
@@ -10,81 +10,136 @@ import {
   MonitorPlay,
   Paperclip,
   Trash2,
+  TriangleAlert,
   UploadCloud,
 } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Button, Card, Modal } from '../components/ui.jsx'
-import {
-  groundingLibrary,
-  groundingSizeLimitMb,
-  term,
-  uploadSizeLimitMb,
-  uploadSteps,
-} from '../data/mock.js'
-import { createSyllabusRecord } from '../data/syllabi.js'
+import { groundingLibrary, groundingSizeLimitMb, term, uploadSizeLimitMb } from '../data/mock.js'
+import { buildSyllabusRecord } from '../data/syllabi.js'
 import { featurePath } from '../data/features.js'
+import { fileSizeLabel, isOwnedBy, timeAgo } from '../data/insights.js'
+import { extractText } from '../lib/extractText.js'
+import { auditSyllabus, parseSyllabus } from '../lib/syllabusParser.js'
 import { useAppState } from '../state/context.js'
 
 const fileIcons = { presentation: MonitorPlay, book: BookOpen, file: FileText }
 
-// Figma's queue listed "ELEC4_WebMobile2_Syllabus.pdf — 85% complete" beside the ELEC 4 file the
-// user is staging on this very screen, so the same document appeared as both pending and in flight
-// under two different names. Only the genuinely earlier upload is listed.
-const queue = [{ name: 'IT_312_HCI_Syllabus.docx', note: 'Parsed 1h ago', done: true }]
+// The real stages of reading a syllabus. The first is the slow one (PDF/Word reading, or OCR for
+// scanned pages); the rest run on the extracted text.
+const parseSteps = [
+  'Reading the document (OCR for scanned pages)',
+  'Finding the course code, title, units and contact hours',
+  "Extracting course outcomes and their Bloom's levels",
+  'Extracting the course outline, chapter hours and CO mapping',
+  'Checking hour totals and outcome coverage',
+]
 
 const field = 'w-full rounded-md border border-white/40 bg-white/70 p-3 text-sm text-ink backdrop-blur-[6px]'
 const label = 'text-xs font-bold text-ink-2'
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)))
 
 export default function Upload() {
   const navigate = useNavigate()
-  const { syllabi, addSyllabus, account, logActivity } = useAppState()
+  const { syllabi, addSyllabus, account, logActivity, bloomLevels } = useAppState()
   const fileInput = useRef(null)
   const groundingInput = useRef(null)
+  const run = useRef(0)
 
   const [file, setFile] = useState(null)
   const [files, setFiles] = useState(groundingLibrary)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
-  const [processing, setProcessing] = useState(false)
-  const [progress, setProgress] = useState(0)
-  // The record being parsed; once the progress bar completes, its verification screen opens.
-  const [parsedId, setParsedId] = useState(null)
-
-  const timer = useRef(null)
-
-  useEffect(() => {
-    if (parsedId && progress >= 100) navigate(featurePath('verification', parsedId))
-  }, [parsedId, progress, navigate])
-  useEffect(() => () => clearInterval(timer.current), [])
+  // null | { status: 'running', step, progress } | { status: 'done', ... } | { status: 'error', ... }
+  const [parse, setParse] = useState(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
-  const [meta, setMeta] = useState({
-    code: 'ELEC 4',
-    title: 'Special Topics on Web and Mobile 2',
-    term: term.label,
-  })
+  const [meta, setMeta] = useState({ code: '', title: '', term: term.label })
 
-  function pickFile(selected) {
+  const recent = useMemo(
+    () =>
+      syllabi
+        .filter((s) => isOwnedBy(s, account))
+        .sort((a, b) => b.uploadedOn.localeCompare(a.uploadedOn))
+        .slice(0, 3),
+    [syllabi, account],
+  )
+
+  async function pickFile(selected) {
     if (!selected) return
-    setFile({ name: selected.name, size: (selected.size / 1024 / 1024).toFixed(1) })
+    const sizeMb = selected.size / 1024 / 1024
+    const token = ++run.current
+    setFile({ raw: selected, name: selected.name, size: fileSizeLabel(sizeMb) })
+    setMeta((m) => ({ ...m, code: '', title: '' }))
+    if (!/\.(pdf|docx)$/i.test(selected.name)) {
+      setParse({ status: 'error', message: 'Upload the syllabus as a PDF or Word (.docx) file.' })
+      return
+    }
+    if (sizeMb > uploadSizeLimitMb) {
+      setParse({ status: 'error', message: `The file is larger than the ${uploadSizeLimitMb} MB limit.` })
+      return
+    }
+
+    const live = () => run.current === token
+    setParse({ status: 'running', step: 0, progress: 0 })
+    try {
+      const extracted = await extractText(selected, (p) =>
+        live() && setParse({ status: 'running', step: 0, progress: p.progress * 0.8, stage: p.stage }),
+      )
+      if (!live()) return
+      // The remaining stages are quick; each is shown as it runs.
+      for (let step = 1; step < parseSteps.length; step++) {
+        setParse({ status: 'running', step, progress: 0.8 + step * 0.04 })
+        await nextFrame()
+        if (!live()) return
+      }
+      const parsed = parseSyllabus(extracted.text, bloomLevels)
+      const audit = auditSyllabus(parsed)
+      const hours = parsed.chapters.reduce((sum, c) => sum + c.hours, 0)
+      const missing = [
+        !parsed.outcomes.length && 'a Course Outcomes section',
+        !parsed.chapters.length && 'a course outline with topics',
+        parsed.chapters.length > 0 && hours === 0 && 'hours in the course outline',
+      ].filter(Boolean)
+      if (missing.length) {
+        setParse({
+          status: 'error',
+          message: `This file does not look like a course syllabus. Not found: ${missing.join('; ')}.`,
+          extracted,
+        })
+        return
+      }
+      setMeta((m) => ({ ...m, code: parsed.code ?? '', title: parsed.title ?? '' }))
+      setParse({ status: 'done', parsed, audit, extracted })
+    } catch (e) {
+      if (!live()) return
+      console.error(e)
+      setParse({ status: 'error', message: e?.message || 'The file could not be read.' })
+    }
   }
 
   const attached = files.filter((f) => f.enabled)
   const usedMb = files.reduce((sum, f) => sum + f.size, 0)
+  const ready = parse?.status === 'done' && meta.code.trim() !== ''
 
   function discard() {
+    run.current++
     setFile(null)
+    setParse(null)
+    setMeta((m) => ({ ...m, code: '', title: '' }))
     setFiles(files.map((f) => ({ ...f, enabled: false })))
     setConfirmDiscard(false)
   }
 
   function proceed() {
-    // The upload joins the syllabus history straight away, so every feature list shows it.
-    const record = createSyllabusRecord(syllabi, {
-      code: meta.code.trim() || 'Untitled',
-      title: meta.title.trim() || file.name,
-      term: meta.term.trim() || term.label,
-      file: file.name,
-      fileSize: Number(file.size),
+    const { parsed, audit, extracted } = parse
+    const record = buildSyllabusRecord({
+      parsed,
+      audit,
+      code: meta.code.trim().toUpperCase(),
+      title: meta.title.trim() || file.name.replace(/\.[^.]+$/, ''),
+      term: meta.term,
+      file: file.raw,
+      extracted,
       uploader: account,
     })
     addSyllabus(record)
@@ -93,19 +148,9 @@ export default function Upload() {
       ai: true,
       syllabusId: record.id,
       code: record.code,
-      text: `Parsed ${record.file}: ${record.outcomes.length} course outcomes, ${record.chapters.length} chapters`,
+      text: `Parsed ${record.file}: ${record.outcomes.length} course outcomes, ${record.chapters.length} chapters, ${record.findings.length} findings`,
     })
-    setProcessing(true)
-    setProgress(0)
-    setParsedId(record.id)
-    clearInterval(timer.current)
-    timer.current = setInterval(() => {
-      setProgress((p) => {
-        const next = Math.min(100, p + 5)
-        if (next >= 100) clearInterval(timer.current)
-        return next
-      })
-    }, 120)
+    navigate(featurePath('verification', record.id))
   }
 
   return (
@@ -126,11 +171,21 @@ export default function Upload() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-base font-bold">{file.name}</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-[13px] text-ink-2">{file.size} MB</p>
+                    <p className="text-[13px] text-ink-2">{file.size}</p>
                     <p className="text-[13px] text-slate-400">•</p>
-                    <span className="rounded bg-ok-bg px-2 py-0.5 text-[11px] font-semibold text-ok">
-                      Ready to Process
-                    </span>
+                    {parse?.status === 'done' ? (
+                      <span className="rounded bg-ok-bg px-2 py-0.5 text-[11px] font-semibold text-ok">
+                        Parsed
+                      </span>
+                    ) : parse?.status === 'error' ? (
+                      <span className="rounded bg-bad-bg px-2 py-0.5 text-[11px] font-semibold text-bad">
+                        Not readable as a syllabus
+                      </span>
+                    ) : (
+                      <span className="rounded bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand">
+                        Reading…
+                      </span>
+                    )}
                   </div>
                 </div>
                 <button
@@ -142,17 +197,24 @@ export default function Upload() {
                 </button>
               </div>
 
-              <div className="flex w-full flex-col gap-2">
-                <div className="flex items-start justify-between text-[13px] font-semibold">
-                  {/* Figma labelled this bar "Optical PDF Layout Validation" at 100%, which claims
-                      validation has already run; validation is what the Proceed action starts. */}
-                  <p className="text-ink-2">Document Transfer</p>
-                  <p className="text-brand">100% Uploaded</p>
+              {parse?.status === 'done' && <ParseSummary parse={parse} />}
+
+              {parse?.status === 'error' && (
+                <div className="flex w-full flex-col gap-2 rounded-xl border border-red-200 bg-bad-bg p-4 text-[13px] text-bad">
+                  <p className="flex items-start gap-2 font-semibold">
+                    <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+                    {parse.message}
+                  </p>
+                  {parse.extracted && (
+                    <details className="text-ink-2">
+                      <summary className="cursor-pointer font-semibold text-brand">Show the text that was read</summary>
+                      <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-white p-3 text-[11px]">
+                        {parse.extracted.text || '(no text found)'}
+                      </pre>
+                    </details>
+                  )}
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded bg-line">
-                  <div className="h-full w-full rounded bg-brand" />
-                </div>
-              </div>
+              )}
 
               <Button variant="ghost" className="border-brand text-brand" onClick={() => fileInput.current?.click()}>
                 Choose different file
@@ -189,7 +251,10 @@ export default function Upload() {
             type="file"
             accept=".pdf,.docx"
             className="hidden"
-            onChange={(e) => pickFile(e.target.files?.[0])}
+            onChange={(e) => {
+              pickFile(e.target.files?.[0])
+              e.target.value = ''
+            }}
           />
 
           <Card className="flex flex-col gap-4 rounded-xl p-6">
@@ -254,18 +319,18 @@ export default function Upload() {
               does not need, so the notice now reports whichever path actually applies. */}
           <Card className="flex items-center gap-3 rounded-xl p-4">
             <Info size={20} className="shrink-0 text-brand" />
-            {file ? (
+            {parse?.extracted ? (
               <p className="text-xs">
-                <span className="font-bold text-brand">Vector text detected:</span> This document
-                carries a native text layer, so OCR is not required. Layout extraction will map
-                directly onto the physical CHED outcomes template.
+                <span className="font-bold text-brand">Read with {parse.extracted.method}:</span>{' '}
+                {parse.extracted.ocrPages > 0
+                  ? `${parse.extracted.ocrPages} scanned page${parse.extracted.ocrPages === 1 ? ' was' : 's were'} read with OCR. Check the extracted values closely on the next screen.`
+                  : 'The document has a text layer, so no OCR was needed.'}
               </p>
             ) : (
               <p className="text-xs">
-                <span className="font-bold text-brand">Scanned Document Fallback Enabled:</span> If
-                your syllabus is a scanned image, the optical parser will automatically invoke
-                regional GPU-accelerated OCR pipelines to recreate native layout schemas. Mappings
-                will preserve physical CHED forms.
+                <span className="font-bold text-brand">Scanned syllabi are supported:</span> pages
+                without a text layer are read with OCR, which downloads its language data the first
+                time it runs.
               </p>
             )}
           </Card>
@@ -286,6 +351,7 @@ export default function Upload() {
                 <input
                   id="code"
                   className={field}
+                  placeholder={parse?.status === 'done' ? 'Not found in the file; type it in' : 'Read from the file'}
                   value={meta.code}
                   onChange={(e) => setMeta({ ...meta, code: e.target.value })}
                 />
@@ -297,6 +363,7 @@ export default function Upload() {
                 <input
                   id="title"
                   className={field}
+                  placeholder="Read from the file"
                   value={meta.title}
                   onChange={(e) => setMeta({ ...meta, title: e.target.value })}
                 />
@@ -320,32 +387,34 @@ export default function Upload() {
                 </select>
               </div>
             </div>
-            <Button className="w-full" disabled={!file || processing} onClick={proceed}>
-              {processing ? 'Parsing document…' : 'Proceed to Parsing Verification'}
+            <Button className="w-full" disabled={!ready} onClick={proceed}>
+              {parse?.status === 'running' ? 'Parsing document…' : 'Proceed to Parsing Verification'}
             </Button>
             {!file && (
               <p className="-mt-2 text-[11px] text-ink-3">
                 Stage a syllabus document to enable parsing.
               </p>
             )}
+            {parse?.status === 'done' && !meta.code.trim() && (
+              <p className="-mt-2 text-[11px] font-semibold text-bad">
+                The course code was not found in the file. Type it in to continue.
+              </p>
+            )}
           </Card>
 
           <Card className="flex flex-col gap-4 rounded-xl p-5">
-            <p className="text-sm font-bold uppercase">Recent Processing Queue</p>
+            <p className="text-sm font-bold uppercase">Your Recent Uploads</p>
             <div className="flex flex-col gap-3">
-              {queue.map((q) => (
-                <div key={q.name} className="flex items-center justify-between gap-3">
+              {recent.length === 0 && <p className="text-[13px] text-ink-3">No uploads yet.</p>}
+              {recent.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
-                    {q.done ? (
-                      <CheckCircle2 size={14} className="shrink-0 text-ok" />
-                    ) : (
-                      <Loader size={14} className="shrink-0 animate-spin text-brand" />
-                    )}
-                    <p className="truncate text-[13px] font-semibold">{q.name}</p>
+                    <CheckCircle2 size={14} className="shrink-0 text-ok" />
+                    <p className="truncate text-[13px] font-semibold" title={s.file}>
+                      {s.file}
+                    </p>
                   </div>
-                  <p className={`shrink-0 text-[11px] ${q.done ? 'text-ink-3' : 'text-brand'}`}>
-                    {q.note}
-                  </p>
+                  <p className="shrink-0 text-[11px] text-ink-3">Parsed {timeAgo(s.uploadedOn)}</p>
                 </div>
               ))}
             </div>
@@ -353,37 +422,29 @@ export default function Upload() {
         </div>
       </div>
 
-      {processing && (
+      {parse?.status === 'running' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/40 p-8">
           <div className="flex w-full max-w-[860px] flex-col gap-8 rounded-[20px] bg-white/95 p-10 shadow-[0_12px_24px_rgba(15,23,42,0.1)]">
             <div className="flex items-center justify-between gap-6">
-              <div>
-                <p className="text-xl font-bold">Analyzing {file?.name}</p>
-                <p className="text-sm text-ink-3">
-                  Step 2 of 3: Multimodal Extraction and CHED compliance alignment in progress.
-                </p>
+              <div className="min-w-0">
+                <p className="truncate text-xl font-bold">Analyzing {file?.name}</p>
+                <p className="text-sm text-ink-3">{parse.stage ?? parseSteps[parse.step]}…</p>
               </div>
-              <p className="text-[28px] font-extrabold text-brand">{progress}%</p>
+              <p className="text-[28px] font-extrabold text-brand">{Math.round(parse.progress * 100)}%</p>
             </div>
 
             <div className="h-2 w-full overflow-hidden rounded bg-line">
               <div
                 className="h-full rounded bg-brand transition-all"
-                style={{ width: `${progress}%` }}
+                style={{ width: `${Math.round(parse.progress * 100)}%` }}
               />
             </div>
 
             <div className="flex flex-col gap-4">
-              {uploadSteps.map((step, i) => {
-                // Each step owns an equal slice of the run, so status follows real progress.
-                const start = (i / uploadSteps.length) * 100
-                const end = ((i + 1) / uploadSteps.length) * 100
-                const state = progress >= end ? 'done' : progress >= start ? 'running' : 'waiting'
+              {parseSteps.map((step, i) => {
+                const state = i < parse.step ? 'done' : i === parse.step ? 'running' : 'waiting'
                 return (
-                  <div
-                    key={step.label}
-                    className={`flex items-center gap-4 ${state === 'waiting' ? 'opacity-50' : ''}`}
-                  >
+                  <div key={step} className={`flex items-center gap-4 ${state === 'waiting' ? 'opacity-50' : ''}`}>
                     <span
                       className={`flex size-6 shrink-0 items-center justify-center rounded-full ${
                         state === 'done' ? 'bg-ok-bg' : state === 'running' ? 'bg-brand-soft' : 'bg-slate-100'
@@ -397,17 +458,13 @@ export default function Upload() {
                         <Circle size={12} className="text-ink-3" />
                       )}
                     </span>
-                    <p className="min-w-0 flex-1 text-sm font-semibold">{step.label}</p>
+                    <p className="min-w-0 flex-1 text-sm font-semibold">{step}</p>
                     <p
                       className={`shrink-0 text-[13px] ${
-                        state === 'done'
-                          ? 'text-ok'
-                          : state === 'running'
-                            ? 'font-semibold text-brand'
-                            : 'text-ink-3'
+                        state === 'done' ? 'text-ok' : state === 'running' ? 'font-semibold text-brand' : 'text-ink-3'
                       }`}
                     >
-                      {state === 'done' ? step.done : state === 'running' ? 'Processing...' : 'Waiting'}
+                      {state === 'done' ? 'Done' : state === 'running' ? 'Processing...' : 'Waiting'}
                     </p>
                   </div>
                 )
@@ -417,9 +474,9 @@ export default function Upload() {
             <div className="flex items-start gap-3 rounded-xl bg-brand-soft p-4">
               <Info size={20} className="shrink-0 text-brand" />
               <p className="min-w-0 flex-1 text-[13px] text-brand">
-                Syllabus ingestion parses course content and maps Bloom&apos;s Taxonomy tags to
-                outcomes automatically. Once complete, you will be redirected to the verification
-                editor.
+                The file is read in your browser. Course outcomes get Bloom&apos;s levels from their
+                action verbs, using your own Bloom&apos;s levels too. You confirm everything on the
+                verification screen next.
               </p>
             </div>
           </div>
@@ -542,5 +599,45 @@ export default function Upload() {
         </Modal>
       )}
     </AppShell>
+  )
+}
+
+/** What the parser found, shown on the staged file so faculty can check it before continuing. */
+function ParseSummary({ parse }) {
+  const { parsed, audit } = parse
+  const hours = parsed.chapters.reduce((sum, c) => sum + c.hours, 0)
+  const facts = [
+    ['Course outcomes', parsed.outcomes.length],
+    ['Chapters / units', parsed.chapters.length],
+    ['Outline hours', `${hours}${parsed.statedHours != null ? ` of ${parsed.statedHours} stated` : ''}`],
+    ['Credit split', parsed.creditSplit],
+  ]
+  return (
+    <div className="flex w-full flex-col gap-3 rounded-xl border border-line bg-white p-4">
+      <div className="grid grid-cols-4 gap-3 max-md:grid-cols-2">
+        {facts.map(([k, v]) => (
+          <div key={k}>
+            <p className="text-[11px] font-semibold text-ink-3">{k}</p>
+            <p className="text-sm font-bold">{v}</p>
+          </div>
+        ))}
+      </div>
+      {audit.findings.length > 0 ? (
+        <p className="flex items-start gap-2 text-xs text-warn">
+          <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+          {audit.findings.length} finding{audit.findings.length === 1 ? '' : 's'} to review (compliance{' '}
+          {audit.complianceScore}%): {audit.findings.map((f) => f.title).join('; ')}
+        </p>
+      ) : (
+        <p className="flex items-center gap-2 text-xs text-ok">
+          <CheckCircle2 size={14} /> Hours reconcile and every course outcome is covered.
+        </p>
+      )}
+      {parsed.warnings.map((w) => (
+        <p key={w} className="text-[11px] text-ink-3">
+          {w}
+        </p>
+      ))}
+    </div>
   )
 }

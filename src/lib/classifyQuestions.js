@@ -251,3 +251,20 @@ export function similarity(a, b) {
 }
 
 export const tierLabel = (tierId) => bloomTiers.find((t) => t.id === tierId)?.short ?? tierId
+
+/**
+ * The Bloom's level of a course outcome, from its action verb: outcomes open with the verb
+ * ("Design and prototype…", "Analyze the time complexity…"), so the earliest verb found wins.
+ * Falls back to Understand when no listed verb appears.
+ */
+export function detectBloom(text, levels) {
+  const body = text.replace(/^(?:students?\s+)?(?:(?:will|should|shall)\s+)?(?:be\s+able\s+to\s+)?/i, '')
+  let best = null
+  levels.forEach((level) => {
+    for (const v of cuesFor(level).verbs) {
+      const m = v.any.exec(body)
+      if (m && (!best || m.index < best.index)) best = { index: m.index, name: level.name }
+    }
+  })
+  return best && best.index < 60 ? best.name : 'Understand'
+}

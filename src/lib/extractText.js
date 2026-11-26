@@ -83,10 +83,13 @@ async function extractPdf(file, onProgress) {
   }
 }
 
-/** Rebuilds reading-order lines from pdf.js text items, which arrive as positioned fragments. */
-function linesFromTextItems(items) {
+/**
+ * Rebuilds reading-order lines from pdf.js text items, which arrive as positioned fragments. A wide
+ * horizontal gap (a table column boundary) becomes a tab, so table rows keep their cells apart.
+ */
+export function linesFromTextItems(items) {
   const fragments = items
-    .filter((i) => 'str' in i && i.str !== '')
+    .filter((i) => 'str' in i && i.str.trim() !== '')
     .map((i) => ({ str: i.str, x: i.transform[4], y: i.transform[5], w: i.width, h: Math.abs(i.transform[3]) || 10 }))
     .sort((a, b) => b.y - a.y || a.x - b.x)
 
@@ -104,6 +107,7 @@ function linesFromTextItems(items) {
         if (i === 0) return p.str
         const prev = parts[i - 1]
         const gap = p.x - (prev.x + prev.w)
+        if (gap > p.h * 0.7) return `${out.trimEnd()}\t${p.str.trimStart()}`
         return out + (gap > p.h * 0.15 && !out.endsWith(' ') && !p.str.startsWith(' ') ? ' ' : '') + p.str
       }, '')
     })
@@ -142,9 +146,38 @@ async function createOcr(onProgress) {
 async function extractDocx(file, onProgress) {
   onProgress({ stage: 'Reading Word document', progress: 0.2 })
   const mammoth = await import('mammoth')
-  const { value } = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })
+  // Converted through HTML rather than raw text so tables keep their rows and cells.
+  const { value } = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() })
   onProgress({ stage: 'Done', progress: 1 })
-  return { text: value, method: 'Word document', pages: 1, ocrPages: 0 }
+  // Word files have no fixed pages; the page count is left unknown.
+  return { text: htmlToLines(value), method: 'Word document', pages: null, ocrPages: 0 }
+}
+
+/** One line per paragraph, heading or list item; one tab-separated line per table row. */
+function htmlToLines(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  doc.querySelectorAll('br').forEach((br) => br.replaceWith('\n'))
+  const clean = (el) => el.textContent.replace(/[ \t\u00A0]+/g, ' ').trim()
+  const lines = []
+  const walk = (el) => {
+    for (const child of el.children) {
+      const tag = child.tagName.toLowerCase()
+      if (tag === 'table') {
+        for (const row of child.querySelectorAll('tr')) {
+          if (row.closest('table') !== child) continue
+          const cells = [...row.children].map((c) => clean(c).replace(/\n+/g, ' '))
+          if (cells.some(Boolean)) lines.push(cells.join('\t'))
+        }
+      } else if (tag === 'ul' || tag === 'ol') {
+        walk(child)
+      } else {
+        const text = clean(child)
+        if (text) lines.push(...text.split('\n').map((t) => t.trim()).filter(Boolean))
+      }
+    }
+  }
+  walk(doc.body)
+  return lines.join('\n')
 }
 
 /**

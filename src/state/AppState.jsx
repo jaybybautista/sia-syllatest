@@ -11,8 +11,8 @@ const defaultExamConfig = {
   translation: 'English & Filipino Dual Mode',
   items: 50,
   duration: 60,
-  // Chapters included in the exam; the TOS allocates across these only.
-  chapters: [1, 2, 3, 4],
+  // Chapters included in the exam (null = all of them); the TOS allocates across these only.
+  chapters: null,
   mix: { lower: 30, mid: 50, higher: 20 },
 }
 
@@ -61,7 +61,13 @@ export function AppStateProvider({ children }) {
   const [accountEmail, setAccountEmail] = useState(() =>
     load(keys.session, null, (e) => typeof e === 'string' && e in accountByEmail),
   )
-  const [data, setData] = useState(() => load(keys.data, null, isData) ?? freshData())
+  const [data, setData] = useState(() => {
+    const stored = load(keys.data, null, isData)
+    if (!stored) return freshData()
+    // Data saved before "all chapters" became the default kept the old fixed 1–4 selection.
+    if (JSON.stringify(stored.examConfig.chapters) === '[1,2,3,4]') stored.examConfig.chapters = null
+    return stored
+  })
   // The syllabus most recently opened from a history list; flow screens that are not tied to a
   // list (exam setup, generation) use it to route back to the right syllabus.
   const [activeSyllabusId, setActiveSyllabusId] = useState(null)
@@ -73,6 +79,15 @@ export function AppStateProvider({ children }) {
 
   const account = accountEmail ? accountByEmail[accountEmail] : null
   const role = account?.role ?? null
+  // The syllabus that exam setup and generation work on: the one last opened, else the user's newest.
+  const activeSyllabus = useMemo(() => {
+    const list = data.syllabi
+    const own = account ? list.filter((s) => s.instructor === account.name || s.uploadedBy === account.name) : []
+    return (
+      list.find((s) => s.id === activeSyllabusId) ??
+      [...(own.length ? own : list)].sort((a, b) => b.uploadedOn.localeCompare(a.uploadedOn))[0]
+    )
+  }, [data.syllabi, activeSyllabusId, account])
   const myLevels = (account && customBloom[account.email]) ?? noLevels
   const bloomLevels = useMemo(() => orderLevels([...standardBloom, ...myLevels]), [myLevels])
 
@@ -166,6 +181,7 @@ export function AppStateProvider({ children }) {
       resetDemoData,
       activeSyllabusId,
       setActiveSyllabusId,
+      activeSyllabus,
       bloomLevels,
       saveBloomLevel,
       deleteBloomLevel,
@@ -182,6 +198,7 @@ export function AppStateProvider({ children }) {
       logActivity,
       resetDemoData,
       activeSyllabusId,
+      activeSyllabus,
       bloomLevels,
       saveBloomLevel,
       deleteBloomLevel,

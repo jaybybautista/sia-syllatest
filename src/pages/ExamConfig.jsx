@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { Check, Circle, CircleAlert, TriangleAlert } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Badge, Button, Card, Modal } from '../components/ui.jsx'
-import { courses, syllabus, timingTemplates } from '../data/mock.js'
+import { timingTemplates } from '../data/mock.js'
+import { isOwnedBy } from '../data/insights.js'
 import { useAppState } from '../state/context.js'
 import { featurePath } from '../data/features.js'
-
-const course = courses[0]
 
 const examTypes = [
   'Midterm Diagnostic Examination',
@@ -46,8 +45,17 @@ const groupLabel = 'text-[11px] font-bold text-ink-3'
 
 export default function ExamConfig() {
   const navigate = useNavigate()
-  const { examConfig, setExamConfig, activeSyllabusId } = useAppState()
-  const { examType, weighting, translation, items, duration, mix, chapters } = examConfig
+  const { examConfig, setExamConfig, activeSyllabusId, setActiveSyllabusId, activeSyllabus, syllabi, account } =
+    useAppState()
+  const syllabus = activeSyllabus
+  const course = syllabus
+  const mine = useMemo(
+    () => syllabi.filter((s) => isOwnedBy(s, account)).sort((a, b) => b.uploadedOn.localeCompare(a.uploadedOn)),
+    [syllabi, account],
+  )
+  const { examType, weighting, translation, items, duration, mix } = examConfig
+  // No saved selection means every chapter of the syllabus is covered.
+  const chapters = examConfig.chapters ?? syllabus.chapters.map((c) => c.n)
   const [overrideTime, setOverrideTime] = useState(false)
 
   const update = (patch) => setExamConfig((c) => ({ ...c, ...patch }))
@@ -112,9 +120,17 @@ export default function ExamConfig() {
                 <label className={groupLabel} htmlFor="syllabus">
                   COURSE SYLLABUS
                 </label>
-                <select id="syllabus" className={selectClass} defaultValue={`${course.code} - ${course.title}`}>
-                  {courses.map((c) => (
-                    <option key={c.code}>{`${c.code} - ${c.title}`}</option>
+                <select
+                  id="syllabus"
+                  className={selectClass}
+                  value={syllabus.id}
+                  onChange={(e) => {
+                    setActiveSyllabusId(e.target.value)
+                    update({ chapters: null })
+                  }}
+                >
+                  {mine.map((s) => (
+                    <option key={s.id} value={s.id}>{`${s.code} - ${s.title} (${s.term})`}</option>
                   ))}
                 </select>
               </div>

@@ -5,23 +5,42 @@ import AppShell from '../components/AppShell.jsx'
 import { Button, Card, Modal } from '../components/ui.jsx'
 import { bloomToneFor } from '../data/bloom.js'
 import { featurePath } from '../data/features.js'
+import { auditSyllabus } from '../lib/syllabusParser.js'
 import { useAppState, useSyllabus } from '../state/context.js'
 
 export default function Verification() {
   const navigate = useNavigate()
   const { syllabus } = useSyllabus()
-  const { bloomLevels } = useAppState()
+  const { bloomLevels, updateSyllabus, logActivity } = useAppState()
   const course = syllabus
   const [zoom, setZoom] = useState(1)
   const [outcomes, setOutcomes] = useState(syllabus.outcomes)
   const [chapters, setChapters] = useState(syllabus.chapters)
+  const [statedHours, setStatedHours] = useState(syllabus.statedHours)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
 
   const total = chapters.reduce((sum, c) => sum + Number(c.hours || 0), 0)
-  const mismatch = total !== syllabus.statedHours
+  const mismatch = total !== statedHours
+  const dirty =
+    outcomes !== syllabus.outcomes || chapters !== syllabus.chapters || statedHours !== syllabus.statedHours
 
-  function setChapterHours(n, hours) {
-    setChapters((cs) => cs.map((c) => (c.n === n ? { ...c, hours: Number(hours) } : c)))
+  function setChapter(n, patch) {
+    setChapters((cs) => cs.map((c) => (c.n === n ? { ...c, ...patch } : c)))
+  }
+
+  /** Writes the corrections to the syllabus. A parsed upload's findings are re-checked against them. */
+  function save() {
+    if (!dirty) return
+    const patch = { outcomes, chapters, statedHours }
+    if (syllabus.source) Object.assign(patch, auditSyllabus(patch))
+    updateSyllabus(syllabus.id, patch)
+    logActivity({ syllabusId: syllabus.id, code: syllabus.code, text: `verified the extracted fields of ${syllabus.code}` })
+  }
+
+  function reset() {
+    setOutcomes(syllabus.outcomes)
+    setChapters(syllabus.chapters)
+    setStatedHours(syllabus.statedHours)
   }
 
   return (
@@ -33,7 +52,9 @@ export default function Verification() {
         <Card className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-white/40 bg-white/60 p-3">
             <p className="text-xs font-bold">
-              {syllabus.file} ({syllabus.pages} Pages)
+              {syllabus.file}
+              {syllabus.pages ? ` (${syllabus.pages} Page${syllabus.pages === 1 ? '' : 's'})` : ''}
+              {syllabus.source && <span className="font-medium text-ink-3"> · read with {syllabus.source.method}</span>}
             </p>
             <div className="flex gap-2">
               <button
@@ -52,6 +73,16 @@ export default function Verification() {
               </button>
             </div>
           </div>
+          {syllabus.source ? (
+            <div className="flex flex-1 justify-center overflow-auto bg-slate-50 p-6">
+              <pre
+                className="h-fit w-full max-w-[640px] origin-top whitespace-pre-wrap rounded-xl bg-white p-8 font-sans text-[11px] leading-[1.6] text-ink-2 shadow-[0_8px_24px_rgba(30,58,138,0.12)]"
+                style={{ transform: `scale(${zoom})`, tabSize: 4 }}
+              >
+                {syllabus.source.text}
+              </pre>
+            </div>
+          ) : (
           <div className="flex flex-1 justify-center overflow-auto bg-slate-50 p-10">
             <article
               className="h-fit w-[450px] shrink-0 origin-top rounded-xl bg-white p-12 shadow-[0_8px_24px_rgba(30,58,138,0.12),0_18px_40px_rgba(15,23,42,0.15)]"
@@ -79,6 +110,7 @@ export default function Verification() {
               </ul>
             </article>
           </div>
+          )}
         </Card>
 
         <div className="flex min-w-0 flex-1 flex-col gap-5">
@@ -88,10 +120,16 @@ export default function Verification() {
               <Button variant="ghost" className="px-3 py-1.5 text-xs" onClick={() => setConfirmDiscard(true)}>
                 Discard Draft
               </Button>
+              <Button className="px-3 py-1.5 text-xs" disabled={!dirty} onClick={save}>
+                {dirty ? 'Save Changes' : 'Saved'}
+              </Button>
               <Button
                 variant="accent"
                 className="px-3 py-1.5 text-xs"
-                onClick={() => navigate(featurePath('consistency', syllabus.id))}
+                onClick={() => {
+                  save()
+                  navigate(featurePath('consistency', syllabus.id))
+                }}
               >
                 Validate Consistency
               </Button>
@@ -104,9 +142,18 @@ export default function Verification() {
               <div className="flex gap-3">
                 <div className="flex-1">
                   <p className="text-[11px] text-ink-3">STATED CO-HOURS</p>
-                  <p className="mt-1 rounded-md bg-slate-100 p-2.5 text-[13px]">
-                    {syllabus.statedHours} Hours
-                  </p>
+                  <div className="mt-1 flex items-center gap-2 rounded-md bg-slate-100 p-1.5">
+                    <input
+                      type="number"
+                      min="0"
+                      aria-label="Stated contact hours"
+                      value={statedHours ?? ''}
+                      placeholder="Not found"
+                      onChange={(e) => setStatedHours(e.target.value === '' ? null : Number(e.target.value))}
+                      className="w-20 rounded border border-line bg-white px-2 py-1 text-[13px]"
+                    />
+                    <span className="text-[13px]">Hours</span>
+                  </div>
                 </div>
                 <div className="flex-1">
                   <p className="text-[11px] text-ink-3">CREDIT SPLIT</p>
@@ -162,7 +209,7 @@ export default function Verification() {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold uppercase">Stated Topic Distributions</p>
                 <p className={`text-xs font-semibold ${mismatch ? 'text-bad' : 'text-ok'}`}>
-                  {total} / {syllabus.statedHours} hours
+                  {total} / {statedHours ?? '?'} hours
                 </p>
               </div>
               <div className="flex flex-col gap-2">
@@ -177,13 +224,26 @@ export default function Verification() {
                         type="number"
                         aria-label={`Hours for chapter ${c.n}`}
                         value={c.hours}
-                        onChange={(e) => setChapterHours(c.n, e.target.value)}
+                        onChange={(e) => setChapter(c.n, { hours: Number(e.target.value) })}
                         className="w-16 rounded border border-line bg-white px-2 py-1 text-right text-xs font-bold text-brand"
                       />
                       <span className="text-[11px] text-ink-3">hrs</span>
-                      <span className="rounded bg-brand-soft px-1.5 py-0.5 text-[10px] font-semibold text-brand">
-                        {c.co}
-                      </span>
+                      <select
+                        aria-label={`Course outcome for chapter ${c.n}`}
+                        value={c.co ?? ''}
+                        title={c.coInferred ? 'Inferred from the wording; confirm it' : undefined}
+                        onChange={(e) => setChapter(c.n, { co: e.target.value, coInferred: false })}
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                          c.coInferred ? 'bg-warn-bg text-warn' : 'bg-brand-soft text-brand'
+                        }`}
+                      >
+                        {outcomes.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.id}
+                            {c.coInferred && o.id === c.co ? ' (inferred)' : ''}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 ))}
@@ -226,22 +286,30 @@ export default function Verification() {
                 variant="ghost"
                 className="flex-1 border-transparent bg-brand/10 text-brand"
                 onClick={() => {
+                  save()
                   setConfirmDiscard(false)
                   navigate('/dashboard')
                 }}
               >
                 Save Draft
               </Button>
-              <Button variant="danger" className="flex-1" onClick={() => navigate('/upload')}>
-                Discard Draft
+              <Button
+                variant="danger"
+                className="flex-1"
+                onClick={() => {
+                  reset()
+                  setConfirmDiscard(false)
+                }}
+              >
+                Discard Changes
               </Button>
             </div>
           }
         >
           <p className="leading-[22px]">
-            You have modified {outcomes.length} parsed course outcomes and reallocated{' '}
-            {chapters.length} lecture topic distribution hour structures. Discarding will permanently
-            erase these corrections.
+            {dirty
+              ? 'Your corrections to the extracted outcomes, chapter hours and outcome mapping have not been saved. Discarding puts back the values last saved.'
+              : 'There are no unsaved corrections. The values shown are the ones saved for this syllabus.'}
           </p>
         </Modal>
       )}

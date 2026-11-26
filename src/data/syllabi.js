@@ -414,28 +414,37 @@ export function formatDate(iso) {
 }
 
 /**
- * Builds the record for a freshly uploaded file. The prototype has no parser, so the extracted
- * content is taken from the latest upload of the same course (or ELEC 4 for a new course); the
- * file, course and term are the ones the user entered.
+ * Builds the record for an uploaded syllabus from what the parser read out of the file. The
+ * question bank starts empty; items are added by importing exam files into it.
  */
-export function createSyllabusRecord(list, { code, title, term: termLabel, file, fileSize, uploader }) {
-  const base = latestForCode(list, code) ?? elec4
+export function buildSyllabusRecord({ parsed, audit, code, title, term: termLabel, file, extracted, uploader }) {
   const stamp = Date.now().toString(36)
   return {
-    ...base,
-    id: `${code.toLowerCase().replace(/\s+/g, '')}-${stamp}`,
+    id: `${code.toLowerCase().replace(/[^a-z0-9]+/g, '')}-${stamp}`,
     code,
     title,
     term: termLabel,
-    file,
-    fileSize,
+    file: file.name,
+    fileSize: Math.round((file.size / 1024 / 1024) * 1000) / 1000,
+    pages: extracted.pages,
     uploadedOn: new Date().toISOString(),
     // The faculty member who uploads a syllabus is the one who teaches it.
     uploadedBy: uploader.name,
     instructor: uploader.name,
+    statedHours: parsed.statedHours,
+    creditSplit: parsed.creditSplit,
+    lectureHours: parsed.lectureHours,
+    labHours: parsed.labHours,
+    outcomes: parsed.outcomes,
+    chapters: parsed.chapters,
+    complianceScore: audit.complianceScore,
+    findings: audit.findings,
+    bankItems: [],
     tosLocked: false,
     review: { state: 'Draft', thread: null },
     analysis: null,
+    // What the file actually said, shown beside the extracted fields on the verification screen.
+    source: { text: extracted.text, method: extracted.method, warnings: parsed.warnings },
   }
 }
 

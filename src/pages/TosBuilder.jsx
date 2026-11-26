@@ -4,6 +4,7 @@ import { CheckCircle2, Info, Lock } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Badge, Button, Card, Modal } from '../components/ui.jsx'
 import { buildMatrix } from '../data/tos.js'
+import { examChapters } from '../lib/tosGaps.js'
 import { levelAbbrev } from '../data/bloom.js'
 import { useAppState, useSyllabus } from '../state/context.js'
 
@@ -21,8 +22,8 @@ export default function TosBuilder() {
 
   // Only the chapters selected on the configuration screen take part in the allocation.
   const selectedChapters = useMemo(
-    () => syllabus.chapters.filter((c) => examConfig.chapters.includes(c.n)),
-    [examConfig.chapters, syllabus.chapters],
+    () => examChapters(syllabus, examConfig),
+    [examConfig, syllabus],
   )
 
   // Columns follow the signed-in user's taxonomy, so levels they added get their own column.

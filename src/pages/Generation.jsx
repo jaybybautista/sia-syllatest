@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, Eye, Loader, TriangleAlert } from 'lucide-react'
 import AppShell from '../components/AppShell.jsx'
 import { Button, Card, ProgressBar } from '../components/ui.jsx'
-import { aiProviders, syllabus } from '../data/mock.js'
+import { aiProviders } from '../data/mock.js'
+import { examChapters } from '../lib/tosGaps.js'
 import { buildMatrix } from '../data/tos.js'
 import { useAppState } from '../state/context.js'
 import { featurePath } from '../data/features.js'
@@ -18,11 +19,11 @@ const [primaryProvider, fallbackProvider] = aiProviders
 
 export default function Generation() {
   const navigate = useNavigate()
-  const { examConfig, activeSyllabusId } = useAppState()
+  const { examConfig, activeSyllabusId, activeSyllabus: syllabus } = useAppState()
 
   const selectedChapters = useMemo(
-    () => syllabus.chapters.filter((c) => examConfig.chapters.includes(c.n)),
-    [examConfig.chapters],
+    () => examChapters(syllabus, examConfig),
+    [examConfig, syllabus],
   )
   const { rows } = useMemo(
     () => buildMatrix(selectedChapters, examConfig.items, examConfig.mix),

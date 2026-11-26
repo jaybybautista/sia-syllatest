@@ -4,12 +4,18 @@ import { buildMatrix } from '../data/tos.js'
 
 const cellKey = (chapter, bloom) => `${chapter}|${bloom}`
 
+/** The chapters an exam covers. No selection (null) means every chapter of the syllabus. */
+export function examChapters(syllabus, examConfig) {
+  const picked = examConfig.chapters
+  return picked ? syllabus.chapters.filter((c) => picked.includes(c.n)) : syllabus.chapters
+}
+
 /**
  * One cell per (chapter, Bloom level) of the TOS for the current exam setup: how many items the
  * TOS asks for, how many the bank already holds, and the gap between the two.
  */
 export function computeGaps({ syllabus, examConfig, levels }) {
-  const chapters = syllabus.chapters.filter((c) => examConfig.chapters.includes(c.n))
+  const chapters = examChapters(syllabus, examConfig)
   const { rows } = buildMatrix(chapters, examConfig.items, examConfig.mix, levels)
   const have = new Map()
   syllabus.bankItems.forEach((q) => {
