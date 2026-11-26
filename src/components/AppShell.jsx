@@ -73,8 +73,10 @@ export default function AppShell({ title, subtitle, actions, children }) {
 
   return (
     <div className="flex min-h-screen items-stretch">
+      {/* z-30: the sidebar's blur makes it its own layer, so without this the main content's cards
+          paint over the account menu that opens out of it. Modals (z-50) still sit above it. */}
       <aside
-        className={`${glass} sticky top-0 flex h-screen w-[260px] shrink-0 flex-col justify-between border-y-0 border-l-0 p-6`}
+        className={`${glass} sticky top-0 z-30 flex h-screen w-[260px] shrink-0 flex-col justify-between border-y-0 border-l-0 p-6`}
       >
         <div className="flex flex-col gap-8">
           <div className="flex items-center gap-3">
@@ -118,7 +120,7 @@ export default function AppShell({ title, subtitle, actions, children }) {
                   onClick={() => setMenuOpen(false)}
                 />
                 <div
-                  className={`${glass} absolute bottom-full left-0 z-50 mb-3 flex w-[340px] flex-col gap-5 rounded-2xl bg-white/95 p-5 shadow-[4px_12px_24px_rgba(15,23,42,0.15)]`}
+                  className="absolute bottom-full left-0 z-50 mb-3 flex w-[340px] flex-col gap-5 rounded-2xl border border-line bg-white p-5 shadow-[4px_12px_24px_rgba(15,23,42,0.15)]"
                   role="menu"
                 >
                   <div className="flex items-center gap-3">
