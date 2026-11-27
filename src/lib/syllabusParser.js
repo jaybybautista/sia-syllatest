@@ -12,7 +12,7 @@ const outcomesHeading = new RegExp(
   'i',
 )
 const outlineHeading = new RegExp(
-  `${sectionPrefix}(?:course\\s+outline|course\\s+contents?|learning\\s+plan|topical\\s+outline|outline\\s+of\\s+topics|course\\s+calendar|weekly\\s+(?:schedule|plan|outline)|course\\s+schedule|topics?\\s+and\\s+schedule)\\b`,
+  `${sectionPrefix}(?:course\\s+outline|course\\s+contents?|(?:course\\s+)?learning\\s+plan|topical\\s+outline|outline\\s+of\\s+topics|course\\s+calendar|weekly\\s+(?:schedule|plan|outline)|course\\s+schedule|topics?\\s+and\\s+schedule)\\b`,
   'i',
 )
 const otherHeading = new RegExp(
@@ -21,14 +21,16 @@ const otherHeading = new RegExp(
 )
 const unitRow = /^(chapter|unit|module|part|lesson)\s*([0-9]+|[ivx]+)\b\s*[:.\-–]?\s*(.*)$/i
 const examRow = /\b(?:prelim(?:inary)?|mid-?term|semi-?final|final)s?\s+(?:exam|examination|test)s?\b|\bexamination\s+week\b/i
-const coRef = /\b(?:CO|CLO|CILO|LO)\s*-?\s*(\d{1,2})\b/gi
+// "CO1", "CO 2", "CLO-3", and "C03" (a zero typed for the letter O, common in real syllabi).
+const coRef = /\b(?:CO|C0|CLO|CILO|LO)\s*-?\s*(\d{1,2})\b/gi
+const coListCell = /^(?:(?:CO|C0|CLO|CILO)\s*-?\s*\d{1,2}[,;\s]*(?:and\s*)?)+$/i
 const wordCount = (s) => s.split(/\s+/).filter(Boolean).length
 
 const labelPatterns = {
   code: /^(?:course\s*(?:code|no\.?|number)|subject\s*code)$/i,
   title: /^(?:course\s*title|descriptive\s*title|course\s*name|subject\s*title)$/i,
   units: /^(?:credit\s*units?|units|credits?|course\s*credits?|no\.?\s*of\s*units)$/i,
-  hours: /^(?:total\s*)?(?:contact\s*hours|no\.?\s*of\s*hours|number\s*of\s*hours|total\s*hours|hours\s*per\s*(?:term|semester))$/i,
+  hours: /^(?:total\s*)?(?:contact\s*hours|class\s*hours|no\.?\s*of\s*hours|number\s*of\s*hours|total\s*hours|hours\s*per\s*(?:term|semester))$/i,
   lecHours: /^lec(?:ture)?\s*hours?$/i,
   labHours: /^lab(?:oratory)?\s*hours?$/i,
 }
@@ -51,7 +53,10 @@ function toLines(text) {
     .filter((l) => l.text)
 }
 
-const isHeading = (line, re) => line.filled.length === 1 && wordCount(line.text) <= 9 && re.test(line.text)
+// A heading is a short line that starts with a capital or a section number; a wrapped sentence
+// fragment such as "assessment and remediation tie" is not one.
+const isHeading = (line, re) =>
+  line.filled.length === 1 && wordCount(line.text) <= 9 && !/^[a-z]/.test(line.text) && re.test(line.text)
 const anyHeading = (line) =>
   isHeading(line, outcomesHeading) || isHeading(line, outlineHeading) || isHeading(line, otherHeading)
 
@@ -102,6 +107,24 @@ function readUnits(value) {
   }
 }
 
+/**
+ * Total contact hours from an hours field: "90 hours", "90 hours/18 weeks", or a weekly load such as
+ * "2 hours-lecture; 3 hours-laboratory per week" (× 18 weeks).
+ */
+function readStatedHours(value) {
+  if (!value) return null
+  const term = value.match(/(\d+(?:\.\d+)?)\s*(?:hrs?|hours)\s*(?:\/|for|in|over)\s*\d+\s*weeks/i)
+  if (term) return Number(term[1])
+  const total = value.match(/total[^\d]{0,20}(\d+(?:\.\d+)?)/i)
+  if (total) return Number(total[1])
+  if (/per\s+week|weekly|\/\s*week/i.test(value)) {
+    const weekly = [...value.matchAll(/(\d+(?:\.\d+)?)\s*(?:hrs?|hours)/gi)].reduce((sum, m) => sum + Number(m[1]), 0)
+    const weeks = firstNumber(value.match(/(\d+)\s*weeks/i)?.[1]) ?? 18
+    if (weekly) return weekly * weeks
+  }
+  return firstNumber(value)
+}
+
 function readHourSplit(value) {
   if (!value) return {}
   const lec = value.match(/(\d+(?:\.\d+)?)\s*(?:hrs?|hours)?\s*(?:of\s+)?lec(?:ture)?/i)
@@ -113,7 +136,9 @@ function readHourSplit(value) {
 function section(lines, headingRe) {
   const start = lines.findIndex((l) => isHeading(l, headingRe) || (l.filled.length > 1 && headingRe.test(l.filled[0]) && wordCount(l.filled[0]) <= 6 && l.filled.length <= 2 && !/\d/.test(l.filled[1] ?? '')))
   if (start < 0) return null
-  const rest = lines.slice(start + 1)
+  let rest = lines.slice(start + 1)
+  // A repeated heading ("COURSE OUTCOMES" then "COURSE OUTCOMES (CO)") belongs to the same section.
+  while (rest.length && isHeading(rest[0], headingRe)) rest = rest.slice(1)
   const end = rest.findIndex((l) => anyHeading(l))
   return end < 0 ? rest : rest.slice(0, end)
 }
@@ -125,6 +150,23 @@ function readOutcomes(lines, levels) {
   const numbered = /^(?:(?:CO|CLO|CILO|LO)\s*-?\s*(\d{1,2})|(\d{1,2})|([a-h]))\s*[.:)\-–]?\s+(.{8,})$/i
   const intro = (t) => /able\s+to\b|^upon\s+completion|^at\s+the\s+end\s+of/i.test(t) || /:$/.test(t)
   const headerRow = (l) => l.filled.every((c) => /^(?:course\s+outcomes?|code|description|COs?|program\s+outcomes?|POs?|outcomes?)$/i.test(c))
+
+  // Outcomes labelled CO1., CO2., … : each label starts an outcome, and the other cells on the row
+  // (ILO / PO / SDG mappings) are ignored. Wrapped text continues the outcome above.
+  const labelled = /^(?:CO|C0|CLO|CILO)\s*-?\s*0?(\d{1,2})\s*[.:)\-–]\s*(.+)$/i
+  const mappingCell = /^(?:ILO|IT|PO|SDG|CTS|CTH|CD|GA)\b|^[A-Z]{1,4}\d*-[IED]$|^[A-Z]{2,4}\d+-?[A-Z]?$/
+  if (body.some((l) => labelled.test(l.filled[0] ?? ''))) {
+    for (const line of body) {
+      const first = line.filled[0] ?? ''
+      if (/^legend\b/i.test(first)) break
+      const m = first.match(labelled)
+      if (m) items.push({ num: Number(m[1]), text: m[2] })
+      else if (items.length && !mappingCell.test(first) && !intro(first) && /^[a-z(]/.test(first)) {
+        items.at(-1).text += ` ${first}`
+      }
+    }
+    body.length = 0
+  }
 
   for (const line of body) {
     if (headerRow(line) || intro(line.text)) continue
@@ -154,11 +196,104 @@ function readOutcomes(lines, levels) {
   })
 }
 
+// "CHAPTER 1: INTRODUCTION TO 8 9 …": a chapter heading inside a learning-plan row, followed by its
+// lecture and laboratory hours.
+const chapterInRow = /\b(chapter|unit|module|lesson)\s+(\d{1,2}|[ivx]{1,4})\s*[:.\-–]\s*(.+?)\s+(\d{1,3})(?:\s+(\d{1,3}))?(?=\s|$)/i
+const capsCell = /^[A-Z][A-Z0-9 ,&'’/()-]*[A-Z)]$/
+const notTitleWords = /^(?:LECTURE|LABORATORY|LAB|CMD|SDLC|NIST|ISO|LMS|PSU|ILP|CIA|OS|IT|IA|SDG|ILO|PO)$/
+const endsOpen = /(?:\b(?:TO|FOR|OF|AND|IN|THE|ON|WITH|A|AN)|,)$/i
+
+const titleCase = (s) =>
+  /[a-z]/.test(s)
+    ? s
+    : s
+        .toLowerCase()
+        .replace(/\b([a-z])/g, (c) => c.toUpperCase())
+        .replace(/\b(To|For|Of|And|In|The|On|With|A|An)\b/g, (w, _m, i) => (i === 0 ? w : w.toLowerCase()))
+
+/** An all-caps cell that continues a wrapped chapter title ("SECURITY MAINTENANCE"). */
+function titleContinuation(line) {
+  return line?.filled.find(
+    (c) => capsCell.test(c) && /[A-Z]{4,}/.test(c) && !c.split(/\s+/).every((w) => notTitleWords.test(w.replace(/[,()]/g, ''))),
+  )
+}
+
+/**
+ * Learning-plan tables (as in the PSU syllabus form) put each chapter in the middle of a row beside
+ * its outcomes, learning outcomes and activities, with separate lecture and laboratory hours.
+ * Returns null when the outline is not laid out that way.
+ */
+function readLearningPlan(body) {
+  const hits = body
+    .map((line, i) => ({ i, m: line.text.match(chapterInRow) }))
+    .filter((h) => h.m)
+  if (hits.length < 2) return null
+
+  const chapters = hits.map(({ i, m }, k) => {
+    const end = k + 1 < hits.length ? hits[k + 1].i : body.length
+    let title = m[3].trim()
+    // Wrapped titles continue as all-caps cells on the next lines.
+    for (let j = i + 1; j < Math.min(end, i + 3); j++) {
+      const more = titleContinuation(body[j])
+      if (!more) break
+      title = `${title} ${more}`
+      if (!endsOpen.test(more)) break
+    }
+    const block = body.slice(i, end)
+    const cos = block
+      .slice(0, 3)
+      .flatMap((l) => (coListCell.test(l.filled[0] ?? '') ? [...l.filled[0].matchAll(coRef)] : []))
+      .map((r) => `CO ${Number(r[1])}`)
+    const lec = Number(m[4])
+    const lab = m[5] ? Number(m[5]) : 0
+    return {
+      title: titleCase(title.replace(/[,\s]+$/, '')),
+      hours: lec + lab,
+      lec,
+      lab,
+      cos,
+      topics: [block.map((l) => l.text).join(' ').replace(/[•⇥]/g, ' ').replace(/\s+/g, ' ').slice(0, 800)],
+    }
+  })
+
+  // Orientation and examination rows carry hours that count toward the stated total.
+  let otherHours = 0
+  const other = []
+  for (const line of body) {
+    if (chapterInRow.test(line.text)) continue
+    if (examRow.test(line.text)) {
+      const h = firstNumber(line.text.match(/(\d+(?:\.\d+)?)\s*(?:hrs?|hours)\b/i)?.[1])
+      if (h) {
+        otherHours += h
+        other.push(`${line.text.match(examRow)[0].toLowerCase()} ${h} hr${h === 1 ? '' : 's'}`)
+      }
+    } else if (/\borientation\b/i.test(line.text)) {
+      const cell = line.filled.find((c) => /^\d{1,2}$/.test(c))
+      if (cell) {
+        otherHours += Number(cell)
+        other.push(`orientation ${cell} hr${cell === '1' ? '' : 's'}`)
+      }
+    }
+  }
+  return { chapters, otherHours, other }
+}
+
 function readOutline(lines) {
   let body = section(lines, outlineHeading)
   // Without an outline heading, fall back to any table rows that carry hours.
   if (!body) body = lines.filter((l) => l.filled.length > 1)
   const warnings = []
+
+  const plan = readLearningPlan(body)
+  if (plan) {
+    if (plan.otherHours) {
+      warnings.push(
+        `Also scheduled: ${plan.other.join(', ')}. These count toward the stated hours but are not TOS topics.`,
+      )
+    }
+    return { chapters: plan.chapters, otherHours: plan.otherHours, warnings }
+  }
+
   let cols = {}
   const rows = []
   let examHours = 0
@@ -242,8 +377,14 @@ function readOutline(lines) {
       grouped.push({ title: r.topic, hours: r.hours ?? 0, cos: [...r.cos], topics: [r.topic] })
     }
   }
-  if (examHours) warnings.push(`Examination weeks (${examHours} hrs) are not counted as topic hours.`)
-  return { chapters: grouped.filter((g) => /[a-z].*[a-z].*[a-z]/i.test(g.title)), warnings }
+  if (examHours) {
+    warnings.push(`Also scheduled: examinations ${examHours} hrs. These count toward the stated hours but are not TOS topics.`)
+  }
+  return {
+    chapters: grouped.filter((g) => /[a-z].*[a-z].*[a-z]/i.test(g.title)),
+    otherHours: examHours,
+    warnings,
+  }
 }
 
 /** The outcome a chapter serves: the one its rows cite most, else the closest in wording. */
@@ -277,7 +418,7 @@ export function parseSyllabus(text, levels) {
   let labHours = firstNumber(fields.labHours) ?? split.lab
   if (lectureHours == null && units.lec != null) lectureHours = units.lec * 18
   if (labHours == null && units.lab != null) labHours = units.lab * 54
-  let statedHours = firstNumber(fields.hours)
+  let statedHours = readStatedHours(fields.hours)
   if (statedHours == null && (lectureHours != null || labHours != null)) {
     statedHours = (lectureHours ?? 0) + (labHours ?? 0)
     warnings.push(
@@ -300,11 +441,15 @@ export function parseSyllabus(text, levels) {
 
   const chapters = outline.chapters.map((c, i) => {
     const { co, inferred } = chapterOutcome(c, outcomes)
+    // Every known outcome the chapter cites; `co` is the main one, used where one CO is needed.
+    const cos = [...new Set(c.cos)].filter((id) => outcomes.some((o) => o.id === id))
     return {
       n: i + 1,
       title: c.title.replace(/\s*[:.\-–]\s*$/, ''),
       hours: c.hours,
+      ...(c.lec != null ? { lec: c.lec, lab: c.lab } : {}),
       co,
+      cos: cos.length ? cos : co ? [co] : [],
       coInferred: inferred,
       topics: c.topics.join('; '),
     }
@@ -319,6 +464,8 @@ export function parseSyllabus(text, levels) {
     creditSplit,
     outcomes,
     chapters,
+    // Scheduled hours that are not TOS topics (orientation, examinations).
+    otherHours: outline.otherHours ?? 0,
     warnings,
   }
 }
@@ -326,9 +473,11 @@ export function parseSyllabus(text, levels) {
 const weight = { CRITICAL: 14, MEDIUM: 6, LOW: 2 }
 
 /** Consistency findings for a parsed syllabus, and the compliance score they leave. */
-export function auditSyllabus({ statedHours, outcomes, chapters }) {
+export function auditSyllabus({ statedHours, outcomes, chapters, otherHours = 0 }) {
   const findings = []
-  const total = chapters.reduce((sum, c) => sum + c.hours, 0)
+  const topicHours = chapters.reduce((sum, c) => sum + c.hours, 0)
+  const total = topicHours + otherHours
+  const breakdown = otherHours ? ` (${topicHours} in topics + ${otherHours} for orientation and examinations)` : ''
 
   if (statedHours == null) {
     findings.push({
@@ -350,7 +499,7 @@ export function auditSyllabus({ statedHours, outcomes, chapters }) {
       id: 'MATH-001',
       severity: 'CRITICAL',
       title: diff > 0 ? 'Topic Hours Exceed Stated Contact Hours' : 'Topic Hours Short of Stated Contact Hours',
-      detail: `The course outline allots ${total} hours, but the syllabus states ${statedHours} contact hours.`,
+      detail: `The course outline allots ${total} hours${breakdown}, but the syllabus states ${statedHours} contact hours.`,
       stated: `${statedHours} Hours`,
       computed: `${total} Hours`,
       fix: largest
@@ -364,7 +513,7 @@ export function auditSyllabus({ statedHours, outcomes, chapters }) {
     })
   }
 
-  const mapped = new Set(chapters.map((c) => c.co))
+  const mapped = new Set(chapters.flatMap((c) => [c.co, ...(c.cos ?? [])]))
   outcomes
     .filter((o) => !mapped.has(o.id))
     .forEach((o, i) => {

@@ -437,6 +437,7 @@ export function buildSyllabusRecord({ parsed, audit, code, title, term: termLabe
     labHours: parsed.labHours,
     outcomes: parsed.outcomes,
     chapters: parsed.chapters,
+    otherHours: parsed.otherHours,
     complianceScore: audit.complianceScore,
     findings: audit.findings,
     bankItems: [],

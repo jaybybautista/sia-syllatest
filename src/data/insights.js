@@ -3,7 +3,8 @@
 import { formatDate } from './syllabi.js'
 import { computeGaps } from '../lib/tosGaps.js'
 
-export const computedHours = (s) => s.chapters.reduce((sum, c) => sum + c.hours, 0)
+/** Every scheduled hour: chapter topics plus orientation and examinations, if the syllabus lists them. */
+export const computedHours = (s) => s.chapters.reduce((sum, c) => sum + c.hours, 0) + (s.otherHours ?? 0)
 
 /** The syllabi a faculty member is responsible for: ones they teach or uploaded. */
 export function isOwnedBy(syllabus, account) {

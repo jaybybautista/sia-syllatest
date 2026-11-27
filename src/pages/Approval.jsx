@@ -57,7 +57,7 @@ export default function Approval() {
   const { updateSyllabus, logActivity } = useAppState()
   const course = syllabus
   const author = { name: syllabus.instructor }
-  const computedHours = syllabus.chapters.reduce((sum, c) => sum + c.hours, 0)
+  const computedHours = syllabus.chapters.reduce((sum, c) => sum + c.hours, 0) + (syllabus.otherHours ?? 0)
   const coverage = useMemo(() => coCoverage(syllabus), [syllabus])
   const revisionReasons = useMemo(
     () => revisionReasonsFor(syllabus, coverage, computedHours),

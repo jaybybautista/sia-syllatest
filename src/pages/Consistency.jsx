@@ -14,7 +14,7 @@ export default function Consistency() {
   const { syllabus } = useSyllabus()
   const course = syllabus
   const { bankItems, complianceScore, findings: allFindings } = syllabus
-  const computedHours = syllabus.chapters.reduce((sum, c) => sum + c.hours, 0)
+  const computedHours = syllabus.chapters.reduce((sum, c) => sum + c.hours, 0) + (syllabus.otherHours ?? 0)
   const [findings, setFindings] = useState(allFindings)
   const [resolved, setResolved] = useState([])
   const [auditing, setAuditing] = useState(false)

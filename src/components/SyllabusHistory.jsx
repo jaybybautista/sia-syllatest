@@ -8,7 +8,7 @@ import { featurePath, features } from '../data/features.js'
 import { formatDate } from '../data/syllabi.js'
 import { fileSizeLabel, isOwnedBy } from '../data/insights.js'
 
-const hoursOf = (s) => s.chapters.reduce((sum, c) => sum + c.hours, 0)
+const hoursOf = (s) => s.chapters.reduce((sum, c) => sum + c.hours, 0) + (s.otherHours ?? 0)
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`
 
 // What each feature reports about a syllabus in its list, so the row says why it is worth opening.

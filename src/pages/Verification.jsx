@@ -19,7 +19,9 @@ export default function Verification() {
   const [statedHours, setStatedHours] = useState(syllabus.statedHours)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
 
-  const total = chapters.reduce((sum, c) => sum + Number(c.hours || 0), 0)
+  // Orientation and examination hours count toward the stated total but are not chapters.
+  const otherHours = syllabus.otherHours ?? 0
+  const total = chapters.reduce((sum, c) => sum + Number(c.hours || 0), 0) + otherHours
   const mismatch = total !== statedHours
   const dirty =
     outcomes !== syllabus.outcomes || chapters !== syllabus.chapters || statedHours !== syllabus.statedHours
@@ -31,7 +33,7 @@ export default function Verification() {
   /** Writes the corrections to the syllabus. A parsed upload's findings are re-checked against them. */
   function save() {
     if (!dirty) return
-    const patch = { outcomes, chapters, statedHours }
+    const patch = { outcomes, chapters, statedHours, otherHours }
     if (syllabus.source) Object.assign(patch, auditSyllabus(patch))
     updateSyllabus(syllabus.id, patch)
     logActivity({ syllabusId: syllabus.id, code: syllabus.code, text: `verified the extracted fields of ${syllabus.code}` })
@@ -217,7 +219,16 @@ export default function Verification() {
                   <div key={c.n} className="flex items-center gap-3 rounded-md bg-slate-100 p-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-[11px] font-bold text-ink-3">Chapter {c.n}</p>
-                      <p className="truncate text-[13px] font-semibold">{c.title}</p>
+                      <p className="truncate text-[13px] font-semibold" title={c.title}>
+                        {c.title}
+                      </p>
+                      {(c.lec != null && c.lec + c.lab === c.hours) || c.cos?.length > 1 ? (
+                        <p className="text-[10px] text-ink-3">
+                          {c.lec != null && c.lec + c.lab === c.hours && `Lec ${c.lec} + Lab ${c.lab} hrs`}
+                          {c.lec != null && c.lec + c.lab === c.hours && c.cos?.length > 1 && ' · '}
+                          {c.cos?.length > 1 && `also serves ${c.cos.filter((x) => x !== c.co).join(', ')}`}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <input
@@ -232,7 +243,13 @@ export default function Verification() {
                         aria-label={`Course outcome for chapter ${c.n}`}
                         value={c.co ?? ''}
                         title={c.coInferred ? 'Inferred from the wording; confirm it' : undefined}
-                        onChange={(e) => setChapter(c.n, { co: e.target.value, coInferred: false })}
+                        onChange={(e) =>
+                          setChapter(c.n, {
+                            co: e.target.value,
+                            cos: [e.target.value, ...(c.cos ?? []).filter((x) => x !== e.target.value)],
+                            coInferred: false,
+                          })
+                        }
                         className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
                           c.coInferred ? 'bg-warn-bg text-warn' : 'bg-brand-soft text-brand'
                         }`}
@@ -247,6 +264,14 @@ export default function Verification() {
                     </div>
                   </div>
                 ))}
+                {otherHours > 0 && (
+                  <div className="flex items-center gap-3 rounded-md border border-dashed border-line p-3">
+                    <p className="min-w-0 flex-1 text-[12px] text-ink-2">
+                      Orientation and examinations (not TOS topics)
+                    </p>
+                    <p className="shrink-0 text-xs font-bold text-ink-2">{otherHours} hrs</p>
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -254,8 +279,8 @@ export default function Verification() {
               <Card className="flex items-center gap-3 rounded-xl border-brand/40 p-4 shadow-[0_8px_20px_rgba(30,58,138,0.15)]">
                 <CircleAlert size={18} className="shrink-0 text-brand" />
                 <p className="min-w-0 flex-1 text-[13px] font-semibold text-brand">
-                  Curriculum discrepancy check required. Stated lecture split hours sum to {total}{' '}
-                  hours on extraction pipeline.
+                  Curriculum discrepancy check required: the scheduled hours sum to {total}, but the
+                  syllabus states {statedHours ?? 'no'} contact hours.
                 </p>
                 <Button
                   className="shrink-0 px-4 py-2 text-[13px]"

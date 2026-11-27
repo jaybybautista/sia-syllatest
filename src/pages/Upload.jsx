@@ -609,7 +609,7 @@ function ParseSummary({ parse }) {
   const facts = [
     ['Course outcomes', parsed.outcomes.length],
     ['Chapters / units', parsed.chapters.length],
-    ['Outline hours', `${hours}${parsed.statedHours != null ? ` of ${parsed.statedHours} stated` : ''}`],
+    ['Scheduled hours', `${hours + parsed.otherHours}${parsed.statedHours != null ? ` of ${parsed.statedHours} stated` : ''}`],
     ['Credit split', parsed.creditSplit],
   ]
   return (
